@@ -1,0 +1,283 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP Fani | Monitoramento de Logs</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --boticario-dark:#004D3B; --boticario-light:#00684E; --boticario-gold:#C5A059; --bg-body:#F5F2ED; }
+        body { background-color:var(--bg-body); font-family:'Inter',sans-serif; color:#333; margin:0; padding:0; overflow-x:hidden; }
+        .wrapper { display:flex; min-height:100vh; }
+ 
+        .sidebar { width:260px; background:linear-gradient(180deg,var(--boticario-dark) 0%,#003327 100%); color:white; flex-shrink:0; display:flex; flex-direction:column; box-shadow:4px 0 15px rgba(0,0,0,.05); z-index:1000; }
+        .sidebar-header { padding:24px 20px; border-bottom:1px solid rgba(255,255,255,.1); display:flex; align-items:center; gap:12px; }
+        .sidebar-menu { padding:20px 0; flex-grow:1; display:flex; flex-direction:column; gap:5px; }
+        .nav-item-side { padding:12px 24px; color:rgba(255,255,255,.7); text-decoration:none; display:flex; align-items:center; gap:15px; font-weight:500; font-size:.95rem; transition:all .2s; border-left:4px solid transparent; }
+        .nav-item-side:hover { color:white; background:rgba(255,255,255,.05); }
+        .nav-item-side.active { color:white; background:rgba(0,0,0,.15); border-left-color:var(--boticario-gold); font-weight:600; }
+        .sidebar-footer { padding:20px; border-top:1px solid rgba(255,255,255,.1); text-align:center; opacity:.7; }
+ 
+        .main-content { flex-grow:1; display:flex; flex-direction:column; min-width:0; }
+        .topbar { background:white; padding:15px 30px; display:flex; justify-content:flex-end; align-items:center; box-shadow:0 2px 10px rgba(0,0,0,.03); }
+        .content-area { padding:10px; flex-grow:1; }
+ 
+        .card { border:none; border-radius:18px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,.05); background:white; }
+        .card-header-boticario { background:linear-gradient(90deg,var(--boticario-dark),var(--boticario-light)); color:white; font-weight:700; padding:14px 20px; }
+ 
+        .form-label { font-size:.78rem; font-weight:600; color:#555; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+        .form-control, .form-select { border-radius:10px; border:1px solid #D8D8D8; font-size:.9rem; }
+        .form-control:focus, .form-select:focus { border-color:var(--boticario-light); box-shadow:0 0 0 .2rem rgba(0,104,78,.15); }
+ 
+        .btn-boticario { background:var(--boticario-light); color:white; border:none; transition:all .25s; font-weight:600; }
+        .btn-boticario:hover { background:var(--boticario-dark); color:white; transform:translateY(-2px); }
+ 
+        /* Definições das cores das badges de operação */
+        .badge-cadastro { background-color: #d1e7dd !important;  color: #0f5132 !important; border: 1px solid #badbcc; }
+        .badge-alteracao {  background-color: #fff3cd !important; color: #856404 !important; border: 1px solid #ffe69c; }
+        .badge-desligamento { background-color: #f8d7da !important; color: #842029 !important; border: 1px solid #f5c2c7; }
+        .badge-ocorrencia { background-color: #cff4fc !important; color: #055160 !important; border: 1px solid #b6effb; }
+
+        @media print {
+            /* Esconde elementos de navegação e botões */
+            .sidebar, .topbar, .no-print, .btn, .pagination, .card-header-audit { display: none !important; }
+            /* Ajusta o layout para preencher a folha */
+            body, .wrapper, .main-content, .content-area { background: white !important; display: block !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+            .card { box-shadow: none !important; border: none !important; width: 100% !important; }
+
+            /* Garante que a tabela não corte na impressão */
+            .table-responsive { overflow: visible !important; }
+            table { width: 100% !important; font-size: 12px !important; }
+            
+            /* Adiciona um título ao relatório impresso */
+            body::before { content: "Relatório de Auditoria - CP FANI - Emitido em: {{ data_atual }}"; display: block; font-weight: bold;  margin-bottom: 20px; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+ 
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-leaf fs-4" style="color: var(--boticario-gold);"></i>
+            <div>
+                <h6 class="mb-0 fw-bold tracking-wide">CP FANI</h6>
+                <small class="opacity-75" style="font-size: 0.7rem;">RECURSOS HUMANOS</small>
+            </div>
+        </div>
+
+        <nav class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}" class="nav-item-side">
+                <i class="fa-solid fa-chart-pie fa-fw"></i> Dashboard
+            </a>
+            <a href="{{ url_for('listar_funcionarios') }}" class="nav-item-side">
+                <i class="fa-solid fa-users fa-fw"></i> Ativos
+            </a>
+            <a href="{{ url_for('listar_desligados') }}" class="nav-item-side">
+                <i class="fa-solid fa-user-xmark fa-fw"></i> Desligados
+            </a>
+            <a href="{{ url_for('relatorio_experiencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-signature fa-fw"></i> Experiência
+            </a>
+            <a href="{{ url_for('lancar_ferias_busca') }}" class="nav-item-side">
+                <i class="fa-solid fa-plane-departure fa-fw"></i> Férias
+            </a>
+            <a href="{{ url_for('nova_ocorrencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-medical fa-fw"></i> Atestados/Faltas
+            </a>
+            <a href="{{ url_for('auditoria') }}" class="nav-item-side active">
+                <i class="fa-solid fa-shield-halved fa-fw"></i> Auditoria
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <i class="fa-solid fa-bottle-droplet opacity-50 mb-2 fs-5 d-block"></i>
+            <small style="font-size:.65rem;">Franquia O Boticário © 2026</small>
+        </div>
+    </aside>
+ 
+    <main class="main-content">
+        <header class="topbar">
+            <div class="d-flex align-items-center gap-3">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+                </a>
+                <div class="vr opacity-25"></div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Sair
+                </a>
+            </div>
+        </header>
+        <div class="content-area"></div>
+
+<div class="container-fluid px-4 pb-5">
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm no-print" role="alert">
+                    <i class="fa-solid fa-circle-exclamation me-2"></i> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card bg-white p-4 mb-4 border-0 shadow-sm">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <small class="text-uppercase fw-bold text-muted mb-1 d-block" style="letter-spacing: 1px;">Segurança Corporativa</small>
+                <h4 class="fw-bold mb-1" style="color: #004D3B;">Histórico de Movimentações Administrativas</h4>
+                <p class="mb-0 text-muted small">Rastreabilidade completa de alterações e integridade das tabelas do banco de dados.</p>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                <button onclick="window.print()" class="btn btn-success btn-sm shadow-sm fw-bold px-4 py-2" style="background-color: #00684E; border: none;">
+                    <i class="fa-solid fa-print me-1"></i> Gerar Relatório (PDF)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 bg-white">
+        <div class="card-header card-header-audit d-flex justify-content-between align-items-center border-0">
+            <span><i class="fa-solid fa-list-check me-2"></i> Registros de Auditoria (Logs)</span>
+            <small class="text-white-50 small no-print">Página {{ pagina_atual }} de {{ total_paginas }}</small>
+        </div>
+        
+        <div class="p-4 bg-white border-bottom no-print">
+            <form action="{{ url_for('auditoria') }}" method="GET" class="row justify-content-start m-0">
+                <div class="col-md-6 p-0">
+                    <div class="input-group">
+                        <span class="input-group-text border-end-0">
+                            <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                        </span>
+                        <input type="text" name="busca" class="form-control border-start-0 ps-0" 
+                            placeholder="Pesquisar por funcionário ou observação..." 
+                            value="{{ busca }}">
+                        <button class="btn btn-boticario-search px-4" type="submit">Buscar</button>
+                        {% if busca %}
+                            <a href="{{ url_for('auditoria') }}" class="btn btn-outline-secondary">Limpar</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle mb-0">
+                    <thead class="table-dark" style="--bs-table-bg: #004D3B;">
+                        <tr>
+                            <th class="ps-3 py-3"><i class="fa-regular fa-clock me-1"></i> Data/Hora</th>
+                            <th class="py-3"><i class="fa-solid fa-user-tie me-1"></i> Autor</th>
+                            <th class="py-3"><i class="fa-solid fa-users-gear me-1"></i> Alvo</th>
+                            <th class="py-3 text-center"><i class="fa-solid fa-tag me-1"></i> Op.</th>
+                            <th class="py-3"><i class="fa-solid fa-magnifying-glass me-1"></i> Campo / Obs</th>
+                            <th class="py-3"><i class="fa-solid fa-arrow-left me-1"></i> Antes</th>
+                            <th class="pe-3 py-3"><i class="fa-solid fa-arrow-right me-1"></i> Depois</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td class="ps-3 text-date">{{ log['data_evento'] }}</td>
+                            <td><span class="fw-bold text-dark">{{ log['username'] }}</span></td>
+                            <td class="fw-semibold">
+                                {% if log['funcionario'] %}
+                                    {{ log['funcionario'] }}
+                                {% else %}
+                                    <span class="text-muted small">Sistema</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if log['tipo_movimentacao'] == 'CADASTRO' %}
+                                    <span class="badge badge-cadastro text-uppercase px-2 py-1 rounded-1">CAD</span>
+                                {% elif log['tipo_movimentacao'] in ['EDICAO', 'ALTERAÇÃO', 'ALTERACAO'] %}
+                                    <span class="badge badge-alteracao text-uppercase px-2 py-1 rounded-1">ALT</span>
+                                {% elif log['tipo_movimentacao'] == 'DES' %}
+                                    <span class="badge badge-desligamento text-uppercase px-2 py-1 rounded-1">DES</span>
+                                {% elif log['tipo_movimentacao'] == 'OCORRENCIA' %}
+                                    <span class="badge badge-ocorrencia text-uppercase px-2 py-1 rounded-1">AUS</span>
+                                {% else %}
+                                    <span class="badge bg-secondary text-white text-uppercase px-2 py-1 rounded-1">{{ log['tipo_movimentacao'][:3] }}</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="text-secondary small fw-bold">{{ log['observacao'] or 'N/A' }}</span></td>
+                            
+                            <td class="text-mono-val">
+                                {% if log['valor_antigo'] is not none and log['valor_antigo'] != '' %}
+                                    <span class="text-danger text-decoration-line-through">{{ log['valor_antigo'] }}</span>
+                                {% else %}
+                                    <span class="text-muted small opacity-50">vazio</span>
+                                {% endif %}
+                            </td>
+                            
+                            <td class="pe-3 text-mono-val">
+                                {% if log['valor_novo'] is not none and log['valor_novo'] != '' %}
+                                    <code class="text-success bg-light px-1 rounded border border-success-subtle">{{ log['valor_novo'] }}</code>
+                                {% else %}
+                                    <span class="text-muted small">vazio</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        
+                        {% if not logs %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="fa-solid fa-clipboard-question fa-3x mb-3 d-block text-light-emphasis"></i>
+                                Nenhum log de auditoria registrado no período.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    {% if total_paginas > 1 %}
+    <nav aria-label="Navegação de logs" class="mt-4 no-print">
+        <ul class="pagination pagination-sm justify-content-center">
+            <li class="page-item {% if pagina_atual == 1 %}disabled{% endif %}">
+                <a class="page-link border-end-0 text-dark" href="{{ url_for('auditoria', pagina=pagina_atual - 1) }}" tabindex="-1">
+                    <i class="fa-solid fa-chevron-left me-1"></i> Anterior
+                </a>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link bg-light text-dark fw-bold px-3">
+                    {{ pagina_atual }} / {{ total_paginas }}
+                </span>
+            </li>
+            <li class="page-item {% if pagina_atual == total_paginas %}disabled{% endif %}">
+                <a class="page-link text-dark" href="{{ url_for('auditoria', pagina=pagina_atual + 1) }}">
+                    Próximo <i class="fa-solid fa-chevron-right ms-1"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+    
+    <p class="text-center mt-5 text-muted small border-top pt-3">
+        Este relatório eletrônico é de propriedade e uso restrito da administração da franquia <strong>CP FANI</strong>.
+    </p>
+</div>
+<script>
+    // Isso cria um elemento invisível que só aparece na impressão
+    window.onbeforeprint = function() {
+        const data = new Date().toLocaleString('pt-BR');
+        const header = document.createElement('div');
+        header.id = "print-header";
+        header.style.textAlign = "center";
+        header.style.fontWeight = "bold";
+        header.innerHTML = "Relatório de Auditoria - CP FANI - Emitido em: " + data;
+        document.body.prepend(header);
+    };
+    
+    window.onafterprint = function() {
+        const header = document.getElementById('print-header');
+        if (header) header.remove();
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

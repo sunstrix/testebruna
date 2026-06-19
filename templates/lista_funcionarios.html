@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP FANI | Quadro Ativo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --boticario-dark:#004D3B; --boticario-light:#00684E; --boticario-gold:#C5A059; --bg-body:#F5F2ED; }
+        body { background-color:var(--bg-body); font-family:'Inter',sans-serif; color:#333; margin:0; padding:0; overflow-x:hidden; }
+        .wrapper { display:flex; min-height:100vh; }
+ 
+        .sidebar { width:260px; background:linear-gradient(180deg,var(--boticario-dark) 0%,#003327 100%); color:white; flex-shrink:0; display:flex; flex-direction:column; box-shadow:4px 0 15px rgba(0,0,0,.05); z-index:1000; }
+        .sidebar-header { padding:24px 20px; border-bottom:1px solid rgba(255,255,255,.1); display:flex; align-items:center; gap:12px; }
+        .sidebar-menu { padding:20px 0; flex-grow:1; display:flex; flex-direction:column; gap:5px; }
+        .nav-item-side { padding:12px 24px; color:rgba(255,255,255,.7); text-decoration:none; display:flex; align-items:center; gap:15px; font-weight:500; font-size:.95rem; transition:all .2s; border-left:4px solid transparent; }
+        .nav-item-side:hover { color:white; background:rgba(255,255,255,.05); }
+        .nav-item-side.active { color:white; background:rgba(0,0,0,.15); border-left-color:var(--boticario-gold); font-weight:600; }
+        .sidebar-footer { padding:20px; border-top:1px solid rgba(255,255,255,.1); text-align:center; opacity:.7; }
+ 
+        .main-content { flex-grow:1; display:flex; flex-direction:column; min-width:0; }
+        .topbar { background:white; padding:15px 30px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 10px rgba(0,0,0,.03); }
+        .content-area { padding:30px; flex-grow:1; }
+ 
+        .card { border:none; border-radius:18px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,.05); background:white; }
+        .card-header-boticario { background:linear-gradient(90deg,var(--boticario-dark),var(--boticario-light)); color:white; font-weight:700; padding:14px 20px; }
+ 
+        .table thead th { background:#F9F5F1; color:var(--boticario-dark); font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #E3DED8; padding:12px 16px; white-space:nowrap; }
+        .table tbody td { padding:12px 16px; vertical-align:middle; font-size:.9rem; border-bottom:1px solid #F0EDE8; }
+        .table tbody tr:hover { background:#FAFAF8; }
+ 
+        .badge-cargo { background:#EAF4EF; color:var(--boticario-dark); font-size:.75rem; font-weight:600; border:1px solid #C8E6D4; border-radius:6px; padding:3px 8px; }
+        .text-cpf { font-family:monospace; font-size:.85rem; color:#666; }
+ 
+        .btn-boticario { background:var(--boticario-light); color:white; border:none; transition:all .25s; font-weight:600; }
+        .btn-boticario:hover { background:var(--boticario-dark); color:white; }
+        .btn-action { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; font-size:.8rem; transition:all .2s; border:1px solid; }
+ 
+        /* Modal de desligamento */
+        .modal-header-danger { background:linear-gradient(90deg,#dc3545,#c82333); }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+ 
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-leaf fs-4" style="color:var(--boticario-gold);"></i>
+            <div><h6 class="mb-0 fw-bold">CP FANI</h6><small class="opacity-75" style="font-size:.7rem;">RECURSOS HUMANOS</small></div>
+        </div>
+        <nav class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}"           class="nav-item-side"><i class="fa-solid fa-chart-pie fa-fw"></i> Dashboard</a>
+            <a href="{{ url_for('listar_funcionarios') }}" class="nav-item-side active"><i class="fa-solid fa-users fa-fw"></i> Ativos</a>
+            <a href="{{ url_for('listar_desligados') }}"   class="nav-item-side"><i class="fa-solid fa-user-xmark fa-fw"></i> Desligados</a>
+            <a href="{{ url_for('relatorio_experiencia') }}" class="nav-item-side"><i class="fa-solid fa-file-signature fa-fw"></i> Experiência</a>
+            <a href="{{ url_for('lancar_ferias_busca') }}" class="nav-item-side"><i class="fa-solid fa-plane-departure fa-fw"></i> Férias</a>
+            <a href="{{ url_for('nova_ocorrencia') }}"     class="nav-item-side"><i class="fa-solid fa-file-medical fa-fw"></i> Atestados/Faltas</a>
+            
+        </nav>
+        <div class="sidebar-footer">
+            <i class="fa-solid fa-bottle-droplet opacity-50 mb-2 fs-5 d-block"></i>
+            <small style="font-size:.65rem;">Franquia O Boticário © 2026</small>
+        </div>
+    </aside>
+ 
+    <main class="main-content">
+        <header class="topbar">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold" style="color:var(--boticario-dark);">Quadro Ativo de Colaboradores</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{{ url_for('cadastrar') }}" class="btn btn-boticario btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-user-plus me-1"></i> Novo Cadastro
+                </a>
+                <a href="{{ url_for('listar_desligados') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-user-xmark me-1"></i> Ver Desligados
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+                </a>
+                <div class="vr opacity-25"></div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Sair
+                </a>
+            </div>
+        </header>
+ 
+        <div class="content-area">
+ 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}{% endif %}
+            {% endwith %}
+ 
+            <!-- Busca -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body py-3 px-4">
+                    <form method="GET" action="{{ url_for('listar_funcionarios') }}" class="d-flex gap-2 align-items-center">
+                        <i class="fa-solid fa-magnifying-glass text-muted"></i>
+                        <input type="text" name="busca" class="form-control form-control-sm rounded-pill border-0 bg-light"
+                               placeholder="Buscar por CPF ou nome..." value="{{ termo_busca or '' }}" style="max-width:320px;">
+                        <button type="submit" class="btn btn-boticario btn-sm px-3 rounded-pill fw-bold">Buscar</button>
+                        {% if termo_busca %}
+                        <a href="{{ url_for('listar_funcionarios') }}" class="btn btn-outline-secondary btn-sm rounded-pill">Limpar</a>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+ 
+            <!-- Tabela -->
+            <div class="card shadow-sm">
+                <div class="card-header card-header-boticario d-flex justify-content-between align-items-center">
+                    <span><i class="fa-solid fa-users me-2"></i>Colaboradores Ativos</span>
+                    <span class="badge bg-white text-dark fw-bold small">{{ funcionarios|length }} registros</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Nome Completo</th>
+                                    <th>Inscrição CPF</th>
+                                    <th>Admissão</th>
+                                    <th>Cargo / Função</th>
+                                    <th class="text-center">Ações Operacionais</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for f in funcionarios %}
+                                <tr>
+                                    <td class="fw-semibold">{{ f.nome }}</td>
+                                    <td class="text-cpf">{{ f.cpf }}</td>
+                                    <td class="text-muted small">{{ formatar_data_br(f.data_admissao) }}</td>
+                                    <td><span class="badge-cargo">{{ f.cargo }}</span></td>
+                                    <td class="text-center">
+                                        <div class="d-flex justify-content-center gap-1">
+                                            <a href="{{ url_for('detalhes_funcionario', id=f.id) }}"
+                                               class="btn-action btn-outline-secondary text-secondary" title="Ver Ficha">
+                                                <i class="fa-solid fa-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('editar_funcionario', id=f.id) }}"
+                                               class="btn-action btn-outline-warning text-warning" title="Editar">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </a>
+                                            <a href="{{ url_for('lancar_ferias_busca', id=f.id) }}"
+                                               class="btn-action text-white" style="background:var(--boticario-light);border-color:var(--boticario-light);" title="Agendar Férias">
+                                                <i class="fa-solid fa-umbrella-beach"></i>
+                                            </a>
+                                            <button type="button"
+                                               class="btn-action btn-outline-danger text-danger"
+                                               title="Desligar"
+                                               data-bs-toggle="modal" data-bs-target="#modalDesligar"
+                                               data-id="{{ f.id }}" data-nome="{{ f.nome }}">
+                                                <i class="fa-solid fa-user-xmark"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-5">
+                                        <i class="fa-solid fa-users-slash fa-2x mb-2 d-block opacity-25"></i>
+                                        Nenhum colaborador encontrado.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+ 
+            <footer class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center opacity-75">
+                <small class="fw-bold">{{ funcionarios|length }} colaboradores ativos</small>
+                <small>CP FANI Sistema Operacional © 2026</small>
+            </footer>
+        </div>
+    </main>
+</div>
+ 
+<!-- Modal Desligar -->
+<div class="modal fade" id="modalDesligar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header modal-header-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i>Desligar Colaborador</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formDesligar" method="POST">
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">Você está prestes a remover <strong id="nomeDesligar"></strong> do quadro de funcionários ativos.</p>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">Data de Desligamento</label>
+                        <input type="date" class="form-control" name="data_desligamento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">Tipo de Desligamento</label>
+                        <select class="form-select" name="tipo_desligamento" required>
+                        <option value="" disabled selected>Selecione...</option>
+                        <option value="DISPENSA SEM JUSTA CAUSA">Dispensa Sem Justa Causa</option>
+                        <option value="DISPENSA COM JUSTA CAUSA">Dispensa Com Justa Causa</option>
+                        <option value="PEDIDO DE DEMISSÃO">Pedido de Demissão</option>
+                        <option value="TÉRMINO DE CONTRATO">Término de Contrato</option>
+                    </select>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">Motivo / Justificativa</label>
+                        <textarea class="form-control" name="motivo_desligamento" rows="3"
+                                  placeholder="Insira os detalhes operacionais do encerramento de contrato..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">
+                        <i class="fa-solid fa-user-xmark me-1"></i> Confirmar Desligamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+ 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const modalDesligar = document.getElementById('modalDesligar');
+modalDesligar.addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    document.getElementById('nomeDesligar').textContent = btn.dataset.nome;
+    document.getElementById('formDesligar').action = '/desligar_funcionario/' + btn.dataset.id;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP FANI | Contratos de Experiência</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --boticario-dark:#004D3B; --boticario-light:#00684E; --boticario-gold:#C5A059; --bg-body:#F5F2ED; }
+        body { background-color:var(--bg-body); font-family:'Inter',sans-serif; color:#333; margin:0; padding:0; overflow-x:hidden; }
+        .wrapper { display:flex; min-height:100vh; }
+ 
+        .sidebar { width:260px; background:linear-gradient(180deg,var(--boticario-dark) 0%,#003327 100%); color:white; flex-shrink:0; display:flex; flex-direction:column; box-shadow:4px 0 15px rgba(0,0,0,.05); z-index:1000; }
+        .sidebar-header { padding:24px 20px; border-bottom:1px solid rgba(255,255,255,.1); display:flex; align-items:center; gap:12px; }
+        .sidebar-menu { padding:20px 0; flex-grow:1; display:flex; flex-direction:column; gap:5px; }
+        .nav-item-side { padding:12px 24px; color:rgba(255,255,255,.7); text-decoration:none; display:flex; align-items:center; gap:15px; font-weight:500; font-size:.95rem; transition:all .2s; border-left:4px solid transparent; }
+        .nav-item-side:hover { color:white; background:rgba(255,255,255,.05); }
+        .nav-item-side.active { color:white; background:rgba(0,0,0,.15); border-left-color:var(--boticario-gold); font-weight:600; }
+        .sidebar-footer { padding:20px; border-top:1px solid rgba(255,255,255,.1); text-align:center; opacity:.7; }
+ 
+        .main-content { flex-grow:1; display:flex; flex-direction:column; min-width:0; }
+        .topbar { background:white; padding:15px 30px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 10px rgba(0,0,0,.03); }
+        .content-area { padding:30px; flex-grow:1; }
+ 
+        .card { border:none; border-radius:18px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,.05); background:white; }
+        .card-header-boticario { background:linear-gradient(90deg,var(--boticario-dark),var(--boticario-light)); color:white; font-weight:700; padding:14px 20px; }
+ 
+        .table thead th { background:#F9F5F1; color:var(--boticario-dark); font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #E3DED8; padding:12px 16px; white-space:nowrap; }
+        .table tbody td { padding:12px 16px; vertical-align:middle; font-size:.9rem; border-bottom:1px solid #F0EDE8; }
+        .table tbody tr:hover { background:#FAFAF8; }
+ 
+        .badge-fase { font-size:.72rem; font-weight:600; border-radius:6px; padding:3px 8px; background:#EAF4EF; color:var(--boticario-dark); border:1px solid #C8E6D4; }
+        .text-date { font-family:monospace; font-size:.88rem; color:#555; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-leaf fs-4" style="color: var(--boticario-gold);"></i>
+            <div>
+                <h6 class="mb-0 fw-bold tracking-wide">CP FANI</h6>
+                <small class="opacity-75" style="font-size: 0.7rem;">RECURSOS HUMANOS</small>
+            </div>
+        </div>
+
+        <nav class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}" class="nav-item-side">
+                <i class="fa-solid fa-chart-pie fa-fw"></i> Dashboard
+            </a>
+            <a href="{{ url_for('listar_funcionarios') }}" class="nav-item-side">
+                <i class="fa-solid fa-users fa-fw"></i> Ativos
+            </a>
+            <a href="{{ url_for('listar_desligados') }}" class="nav-item-side">
+                <i class="fa-solid fa-user-xmark fa-fw"></i> Desligados
+            </a>
+            <a href="{{ url_for('relatorio_experiencia') }}" class="nav-item-side active">
+                <i class="fa-solid fa-file-signature fa-fw"></i> Experiência
+            </a>
+            <a href="{{ url_for('lancar_ferias_busca') }}" class="nav-item-side">
+                <i class="fa-solid fa-plane-departure fa-fw"></i> Férias
+            </a>
+            <a href="{{ url_for('nova_ocorrencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-medical fa-fw"></i> Atestados/Faltas
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <i class="fa-solid fa-bottle-droplet opacity-50 mb-2 fs-5 d-block"></i>
+            <small style="font-size: 0.65rem;">Franquia O Boticário © 2026</small>
+        </div>
+    </aside>
+ 
+    <main class="main-content">
+        <header class="topbar">
+            <span class="fw-bold" style="color:var(--boticario-dark);">Monitoramento de Contratos de Experiência</span>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+                </a>
+                <div class="vr opacity-25"></div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Sair
+                </a>
+            </div>
+        </header>
+ 
+        <div class="content-area">
+ 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}{% endif %}
+            {% endwith %}
+ 
+            <div class="card shadow-sm">
+                <div class="card-header card-header-boticario d-flex justify-content-between align-items-center">
+                    <span><i class="fa-solid fa-users-viewfinder me-2"></i>Colaboradores em Período de Avaliação</span>
+                    <span class="badge bg-white text-dark fw-bold small">{{ lista_exp|length }} listados</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Funcionário</th>
+                                    <th>Estágio Atual</th>
+                                    <th>Admissão</th>
+                                    <th>1ª Fase (45d)</th>
+                                    <th>Término (90d)</th>
+                                    <th class="text-end pe-4">Status / Prazo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for exp in lista_exp %}
+                                <tr>
+                                    <td class="fw-semibold">{{ exp.nome }}</td>
+                                    <td><span class="badge-fase">{{ exp.fase }}</span></td>
+                                    <td class="text-date">{{ exp.data_admissao }}</td>
+                                    <td class="text-date">{{ exp.data_45 }}</td>
+                                    <td class="text-date">{{ exp.data_90 }}</td>
+                                    <td class="text-end pe-4">
+                                        <span class="badge bg-{{ exp.alerta }} {% if exp.alerta == 'warning' %}text-dark{% endif %} px-3 py-2 rounded-pill fw-bold" style="font-size:.75rem;">
+                                            {% if exp.alerta == 'danger' %}<i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                            {% elif exp.alerta == 'warning' %}<i class="fa-solid fa-clock me-1"></i>
+                                            {% else %}<i class="fa-solid fa-circle-check me-1"></i>{% endif %}
+                                            {{ exp.mensagem_status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-5">
+                                        <i class="fa-solid fa-circle-nodes fa-2x mb-2 d-block opacity-25"></i>
+                                        Nenhum colaborador em período de experiência.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+ 
+            <footer class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center opacity-75">
+                <small class="fw-bold">Painel sincronizado em tempo real</small>
+                <small>CP FANI Sistema Operacional © 2026</small>
+            </footer>
+        </div>
+    </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+ 

@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP Fani | Alteração de Colaborador</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --boticario-dark: #004D3B;
+            --boticario-light: #00684E;
+            --boticario-gold: #C5A059;
+            --bg-body: #F5F2ED;
+        }
+        body { background-color: var(--bg-body); font-family: 'Inter', sans-serif; color: #333; margin: 0; padding: 0; overflow-x: hidden; }
+        
+        /* ESTRUTURA PRINCIPAL (SIDEBAR + CONTEÚDO) */
+        .wrapper { display: flex; min-height: 100vh; }
+ 
+        /* SIDEBAR */
+        .sidebar { width: 260px; background: linear-gradient(180deg, var(--boticario-dark) 0%, #003327 100%); color: white; flex-shrink: 0; display: flex; flex-direction: column; box-shadow: 4px 0 15px rgba(0,0,0,0.05); z-index: 1000; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 12px; }
+        .sidebar-menu { padding: 20px 0; flex-grow: 1; display: flex; flex-direction: column; gap: 5px; }
+        .nav-item-side { padding: 12px 24px; color: rgba(255,255,255,0.7); text-decoration: none; display: flex; align-items: center; gap: 15px; font-weight: 500; font-size: 0.95rem; transition: all 0.2s; border-left: 4px solid transparent; }
+        .nav-item-side:hover { color: white; background: rgba(255,255,255,0.05); }
+        .nav-item-side.active { color: white; background: rgba(0,0,0,0.15); border-left-color: var(--boticario-gold); font-weight: 600; }
+        .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); text-align: center; opacity: 0.7; }
+ 
+        /* MAIN */
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; min-width: 0; }
+        .topbar { background: white; padding: 15px 30px; display: flex; justify-content: flex-end; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.03); z-index: 10; }
+        .content-area { padding: 30px; flex-grow: 1; }
+ 
+        /* CARDS */
+        .card { border: none; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,.05); background: white; }
+        .card-header-boticario { background: linear-gradient(90deg, var(--boticario-dark), var(--boticario-light)); color: white; font-weight: 700; padding: 14px 20px; }
+ 
+        /* FORMULÁRIO */
+        .section-title { color: var(--boticario-dark); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid var(--boticario-gold); padding-bottom: 6px; margin-top: 24px; margin-bottom: 16px; }
+        .form-label { font-size: 0.78rem; font-weight: 600; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .form-control, .form-select { border-radius: 10px; border: 1px solid #D8D8D8; font-size: 0.9rem; }
+        .form-control:focus, .form-select:focus { border-color: var(--boticario-light); box-shadow: 0 0 0 .2rem rgba(0,104,78,.15); }
+        .readonly-field { background-color: #F0EDE8 !important; border-color: #E0DDD8 !important; color: #999 !important; cursor: not-allowed; }
+        .readonly-label { color: #aaa !important; }
+        .readonly-block { background: #F9F5F1; border: 1px solid #E3DED8; border-radius: 14px; padding: 16px 20px; }
+        .readonly-block .form-control { background-color: #F0EDE8; border-color: #E0DDD8; color: #999; cursor: not-allowed; }
+ 
+        /* BOTÕES */
+        .btn-boticario { background: var(--boticario-light); color: white; border: none; transition: all .25s ease; font-weight: 600; }
+        .btn-boticario:hover { background: var(--boticario-dark); color: white; transform: translateY(-2px); }
+        fieldset { border: none; padding: 0; margin: 0; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+ 
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-leaf fs-4" style="color: var(--boticario-gold);"></i>
+            <div>
+                <h6 class="mb-0 fw-bold">CP FANI</h6>
+                <small class="opacity-75" style="font-size: 0.7rem;">RECURSOS HUMANOS</small>
+            </div>
+        </div>
+        <nav class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}" class="nav-item-side">
+                <i class="fa-solid fa-chart-pie fa-fw"></i> Dashboard
+            </a>
+            <a href="{{ url_for('listar_funcionarios') }}" class="nav-item-side active">
+                <i class="fa-solid fa-users fa-fw"></i> Ativos
+            </a>
+            <a href="{{ url_for('listar_desligados') }}" class="nav-item-side">
+                <i class="fa-solid fa-user-xmark fa-fw"></i> Desligados
+            </a>
+            <a href="{{ url_for('relatorio_experiencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-signature fa-fw"></i> Experiência
+            </a>
+            <a href="{{ url_for('lancar_ferias_busca') }}" class="nav-item-side">
+                <i class="fa-solid fa-plane-departure fa-fw"></i> Férias
+            </a>
+            <a href="{{ url_for('nova_ocorrencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-medical fa-fw"></i> Atestados/Faltas
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <i class="fa-solid fa-bottle-droplet opacity-50 mb-2 fs-5 d-block"></i>
+            <small style="font-size: 0.65rem;">Franquia O Boticário © 2026</small>
+        </div>
+    </aside>
+ 
+    <!-- MAIN -->
+    <main class="main-content">
+        <header class="topbar">
+            <div class="d-flex align-items-center gap-3">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+                </a>
+                <div class="vr opacity-25"></div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Sair
+                </a>
+            </div>
+        </header>
+ 
+        <div class="content-area">
+ 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+ 
+            <!-- CABEÇALHO -->
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <div class="rounded-3 d-flex align-items-center justify-content-center"
+                     style="width:48px;height:48px;background:#E7F5EF;color:var(--boticario-light);font-size:1.1rem;flex-shrink:0;">
+                    <i class="fa-solid fa-user-pen"></i>
+                </div>
+                <div>
+                    <h4 class="fw-bold mb-0" style="color: var(--boticario-dark);">Novo Cadastro</h4>
+                    <small class="text-muted">Preencha todos os campos para finalizar o cadastro.</small>
+                </div>
+            </div>
+
+                    <!-- CARD PRINCIPAL DO FORMULÁRIO -->
+                    <div class="card shadow-sm border-0 bg-white">
+                        <div class="card-header card-header-boticario border-0">
+                            <i class="fa-solid fa-user-plus me-2"></i>Cadastro de Novo Colaborador
+                        </div>
+                        <div class="card-body p-4">
+                            <form method="POST" id="formCadastro" class="needs-validation" novalidate>
+
+                                <!-- BLOCO 1: DADOS PESSOAIS -->
+                                <fieldset class="mb-4">
+                                    <legend class="section-title mb-3">
+                                        <i class="fa-solid fa-id-card me-2"></i>Dados Pessoais
+                                    </legend>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label small">Nome Completo</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+                                                <input type="text" name="nome" class="form-control" placeholder="Ex: Bruna Oliveira" required value="{{ dados.nome if dados else '' }}">
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label small">CPF</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fa-solid fa-address-card"></i></span>
+                                                <input type="text" name="cpf" class="form-control" data-mask="cpf" placeholder="000.000.000-00" required value="{{ dados.cpf if dados else '' }}">
+                                                <div class="invalid-feedback">CPF inválido. Verifique os dígitos informados.</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Data de Nascimento</label>
+                                            <input type="date" name="data_nascimento" class="form-control" required value="{{ dados.data_nascimento if dados else '' }}">
+                                            <div class="form-text text-muted">Necessário para o alerta de aniversariantes.</div>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Estado Civil</label>
+                                            <select name="estado_civil" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Solteiro(a)">Solteiro(a)</option>
+                                                <option value="Casado(a)">Casado(a)</option>
+                                                <option value="Divorciado(a)">Divorciado(a)</option>
+                                                <option value="Viúvo(a)">Viúvo(a)</option>
+                                                <option value="União Estável">União Estável</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Sexo</label>
+                                            <select name="sexo" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Feminino">Feminino</option>
+                                                <option value="Masculino">Masculino</option>
+                                                <option value="Não Binário">Não Binário</option>
+                                                <option value="Outros">Outros</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Raça</label>
+                                            <select name="raca" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Amarelo">Amarelo</option>
+                                                <option value="Branco">Branco</option>
+                                                <option value="Indígena">Indígena</option>
+                                                <option value="Pardo">Pardo</option>
+                                                <option value="Preto">Preto</option>
+                                                <option value="Outro">Outro</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Escolaridade</label>
+                                            <select name="escolaridade" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Ensino Médio Completo">Ensino Médio Completo</option>
+                                                <option value="Ensino Técnico Completo">Ensino Técnico Completo</option>
+                                                <option value="Ensino Superior Incompleto">Ensino Superior Incompleto</option>
+                                                <option value="Ensino Superior Completo">Ensino Superior Completo</option>
+                                                <option value="Pós Graduação Incompleta">Pós Graduação Incompleta</option>
+                                                <option value="Pós Graduação Completa">Pós Graduação Completa</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Telefone</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fa-solid fa-phone"></i></span>
+                                                <input type="text" name="telefone" class="form-control" data-mask="telefone" placeholder="(11) 99999-9999" required value="{{ dados.telefone if dados else '' }}">
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-12">
+                                            <label class="form-label small">E-mail</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fa-solid fa-envelope"></i></span>
+                                                <input type="email" name="email" class="form-control" placeholder="nome@email.com" required value="{{ dados.email if dados else '' }}">
+                                                <div class="invalid-feedback">E-mail com formato inválido.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </fieldset>
+
+                                <hr class="my-4 text-muted">
+
+                                <!-- BLOCO 2: DADOS BANCÁRIOS -->
+                                <fieldset class="mb-4">
+                                    <legend class="section-title mb-3">
+                                        <i class="fa-solid fa-credit-card me-2"></i>Dados Bancários
+                                    </legend>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Banco</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fa-solid fa-building-columns"></i></span>
+                                                <input type="text" name="banco" class="form-control" placeholder="Ex: Itaú" required value="{{ dados.banco if dados else '' }}">
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Agência</label>
+                                            <input type="text" name="agencia" class="form-control" placeholder="0200" required value="{{ dados.agencia if dados else '' }}">
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Conta e Dígito</label>
+                                            <input type="text" name="conta" class="form-control" placeholder="0200000-0" required value="{{ dados.conta if dados else '' }}">
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Modalidade</label>
+                                            <select name="modalidade_conta" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Conta Corrente">Conta Corrente</option>
+                                                <option value="Conta Poupança">Conta Poupança</option>
+                                                <option value="Conta Salário">Conta Salário</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </fieldset>
+
+                                <hr class="my-4 text-muted">
+
+                                <!-- BLOCO 3: ENDEREÇO -->
+                                <fieldset class="mb-4">
+                                    <legend class="section-title mb-3">
+                                        <i class="fa-solid fa-location-dot me-2"></i>Endereço
+                                    </legend>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-2">
+                                            <label class="form-label small">CEP</label>
+                                            <input type="text" name="endereco_cep" class="form-control" data-mask="cep" placeholder="00000-000" required value="{{ dados.endereco_cep if dados else '' }}">
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label small">Rua / Logradouro</label>
+                                            <input type="text" name="endereco_rua" class="form-control" required value="{{ dados.endereco_rua if dados else '' }}">
+                                        </div>
+
+                                        <div class="col-md-1">
+                                            <label class="form-label small">Nº</label>
+                                            <input type="text" name="endereco_num" class="form-control" required value="{{ dados.endereco_num if dados else '' }}">
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Bairro</label>
+                                            <input type="text" name="endereco_bairro" class="form-control" required value="{{ dados.endereco_bairro if dados else '' }}">
+                                        </div>
+
+                                        <div class="col-md-8">
+                                            <label class="form-label small">Cidade</label>
+                                            <input type="text" name="endereco_cidade" class="form-control" required value="{{ dados.endereco_cidade if dados else '' }}">
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Estado</label>
+                                            <select name="endereco_estado" class="form-select" required>
+                                                <option value="" disabled selected>UF</option>
+                                                <option value="AC">AC</option><option value="AL">AL</option><option value="AM">AM</option>
+                                                <option value="AP">AP</option><option value="BA">BA</option><option value="CE">CE</option>
+                                                <option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option>
+                                                <option value="MA">MA</option><option value="MG">MG</option><option value="MT">MT</option>
+                                                <option value="MS">MS</option><option value="PA">PA</option><option value="PB">PB</option>
+                                                <option value="PE">PE</option><option value="PI">PI</option><option value="PR">PR</option>
+                                                <option value="RJ">RJ</option><option value="RN">RN</option><option value="RO">RO</option>
+                                                <option value="RR">RR</option><option value="RS">RS</option><option value="SC">SC</option>
+                                                <option value="SE">SE</option><option value="SP">SP</option><option value="TO">TO</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </fieldset>
+
+                                <hr class="my-4 text-muted">
+
+                                <!-- BLOCO 4: BENEFÍCIOS -->
+                                <fieldset class="mb-4">
+                                    <legend class="section-title mb-3">
+                                        <i class="fa-solid fa-gift me-2"></i>Benefícios
+                                    </legend>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Convênio Médico</label>
+                                            <select name="optou_convenio" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Sim">Sim</option>
+                                                <option value="Não">Não</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">TotalPass</label>
+                                            <select name="totalpass" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Sim">Sim</option>
+                                                <option value="Não">Não</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Vale Transporte (VT)</label>
+                                            <select name="vt" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Sim">Sim</option>
+                                                <option value="Não">Não</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </fieldset>
+
+                                <hr class="my-4 text-muted">
+
+                                <!-- BLOCO 5: DADOS PROFISSIONAIS -->
+                                <fieldset class="mb-4">
+                                    <legend class="section-title mb-3">
+                                        <i class="fa-solid fa-briefcase me-2"></i>Dados Profissionais
+                                    </legend>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Data de Admissão</label>
+                                            <input type="date" name="data_admissao" class="form-control" required value="{{ dados.data_admissao if dados else '' }}">
+                                            <div class="form-text text-muted">Usado para cálculo de férias e experiência.</div>
+                                        </div>
+
+                                        <div class="col-md-5">
+                                            <label class="form-label small">Cargo</label>
+                                            <select name="cargo" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Analista Administrativo">Analista Administrativo</option>
+                                                <option value="Analista de Business Intelligence">Analista de Business Intelligence</option>
+                                                <option value="Analista de Departamento Pessoal">Analista de Departamento Pessoal</option>
+                                                <option value="Analista de Recrutamento e Seleção">Analista de Recrutamento e Seleção</option>
+                                                <option value="Analista de Suporte Computacional">Analista de Suporte Computacional</option>
+                                                <option value="Analista de Treinamento">Analista de Treinamento</option>
+                                                <option value="Analista Financeiro">Analista Financeiro</option>
+                                                <option value="Analista Fiscal">Analista Fiscal</option>
+                                                <option value="Assistente Administrativo">Assistente Administrativo</option>
+                                                <option value="Assistente Comercial">Assistente Comercial</option>
+                                                <option value="Assistente de Inventário">Assistente de Inventário</option>
+                                                <option value="Assistente de Suporte Computacional">Assistente de Suporte Computacional</option>
+                                                <option value="Atendente de Venda Direta">Atendente de Venda Direta</option>
+                                                <option value="Auxiliar Administrativo Operacional">Auxiliar Administrativo Operacional</option>
+                                                <option value="Consultor(a) de Vendas">Consultor(a) de Vendas</option>
+                                                <option value="Consultor(a) de Vendas Coringa">Consultor(a) de Vendas Coringa</option>
+                                                <option value="Consultor(a) Responsável">Consultor(a) Responsável</option>
+                                                <option value="Coordenador(a) de Recursos Humanos">Coordenador(a) de Recursos Humanos</option>
+                                                <option value="Estagiário(a)">Estagiário(a)</option>
+                                                <option value="Estoquista">Estoquista</option>
+                                                <option value="Estoquista Líder">Estoquista Líder</option>
+                                                <option value="Gerente de Compras">Gerente de Compras</option>
+                                                <option value="Gerente de Loja">Gerente de Loja</option>
+                                                <option value="Gerente de Vendas Internas">Gerente de Vendas Internas</option>
+                                                <option value="Gerente de VD">Gerente de VD</option>
+                                                <option value="Jovem Aprendiz">Jovem Aprendiz</option>
+                                                <option value="Líder de Loja">Líder de Loja</option>
+                                                <option value="Motorista">Motorista</option>
+                                                <option value="Operador(a) de Caixa">Operador(a) de Caixa</option>
+                                                <option value="Supervisor(a) de Campo">Supervisor(a) de Campo</option>
+                                                <option value="Supervisor(a) de Logística">Supervisor(a) de Logística</option>
+                                                <option value="Supervisor(a) Interno">Supervisor(a) Interno</option>
+                                                <option value="Supervisor(a) de Loja">Supervisor(a) de Loja</option>
+                                                <option value="Técnico(a) de Manutenção Predial">Técnico(a) de Manutenção Predial</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Nível Hierárquico</label>
+                                            <select name="nivel" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Aprendiz">Aprendiz</option>
+                                                <option value="Estágio">Estágio</option>
+                                                <option value="Trainee">Trainee</option>
+                                                <option value="Assistente">Assistente</option>
+                                                <option value="Júnior">Júnior</option>
+                                                <option value="Pleno">Pleno</option>
+                                                <option value="Sênior">Sênior</option>
+                                                <option value="Supervisor">Supervisor</option>
+                                                <option value="Coordenador">Coordenador</option>
+                                                <option value="Gerente">Gerente</option>
+                                                <option value="Diretor">Diretor</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Área / Departamento</label>
+                                            <select name="area" class="form-select" required>
+                                                <option value="" disabled selected>Selecione...</option>
+                                                <option value="Administrativo">Administrativo</option>
+                                                <option value="BI">BI</option>
+                                                <option value="Comercial">Comercial</option>
+                                                <option value="Diretoria">Diretoria</option>
+                                                <option value="Financeiro">Financeiro</option>
+                                                <option value="Fiscal">Fiscal</option>
+                                                <option value="Logística">Logística</option>
+                                                <option value="Recursos Humanos">Recursos Humanos</option>
+                                                <option value="Suprimentos">Suprimentos</option>
+                                                <option value="Tecnologia">Tecnologia</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Salário Base</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">R$</span>
+                                                <input type="number" step="0.01" name="salario" class="form-control" placeholder="0,00" required value="{{ dados.salario if dados else '' }}">
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Login Extranet</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fa-solid fa-desktop"></i></span>
+                                                <input type="text" name="login_extranet" class="form-control" placeholder="nome.sobrenome" required value="{{ dados.login_extranet if dados else '' }}">
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label small">Filial</label>
+                                            <select name="filial" class="form-select" required>
+                                                <option value="" disabled selected>Selecione a filial...</option>
+                                                <option value="4842 - Shopping Metrópole">4842 - Shopping Metrópole</option>
+                                                <option value="5152 - Shopping do Coração">5152 - Shopping do Coração</option>
+                                                <option value="6105 - Assaí Anchieta">6105 - Assaí Anchieta</option>
+                                                <option value="6106 - Direita">6106 - Direita</option>
+                                                <option value="6110 - Arouche">6110 - Arouche</option>
+                                                <option value="8001 - Dom José">8001 - Dom José</option>
+                                                <option value="11576 - D'avó">11576 - D'avó</option>
+                                                <option value="12055 - São Bento">12055 - São Bento</option>
+                                                <option value="12056 - Marechal">12056 - Marechal</option>
+                                                <option value="12605 - Coop">12605 - Coop</option>
+                                                <option value="12645 - Shopping Light">12645 - Shopping Light</option>
+                                                <option value="14120 - Arpel Matriz">14120 - Arpel Matriz</option>
+                                                <option value="14353 - Arpel Filial">14353 - Arpel Filial</option>
+                                                <option value="20371 - Metrô Luz">20371 - Metrô Luz</option>
+                                                <option value="21502 - Bem Barato">21502 - Bem Barato</option>
+                                                <option value="23000 - Outlet Imigrantes">23000 - Outlet Imigrantes</option>
+                                                <option value="23379 - Assaí Piraporinha">23379 - Assaí Piraporinha</option>
+                                                <option value="DAES">DAES</option>
+                                                <option value="Arpel Backoffice">Arpel Backoffice</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label small">Gestor Direto</label>
+                                            <select name="gestor" class="form-select" required>
+                                                <option value="" disabled selected>Selecione o gestor...</option>
+                                                <option value="Andreza Antoniassi">Andreza Antoniassi</option>
+                                                <option value="Camilo Unterman">Camilo Unterman</option>
+                                                <option value="Daniel Corbo">Daniel Corbo</option>
+                                                <option value="Diva Rios">Diva Rios</option>
+                                                <option value="Elissandra Augustinho">Elissandra Augustinho</option>
+                                                <option value="Fernanda Carvalho">Fernanda Carvalho</option>
+                                                <option value="Flavio Rafael">Flavio Rafael</option>
+                                                <option value="Isabella Almeida">Isabella Almeida</option>
+                                                <option value="Joselita Arante">Joselita Arante</option>
+                                                <option value="Josenilda Lopes">Josenilda Lopes</option>
+                                                <option value="Julia Simões">Julia Simões</option>
+                                                <option value="Lay Coelho">Lay Coelho</option>
+                                                <option value="Leonardo Roscoe">Leonardo Roscoe</option>
+                                                <option value="Luciana Cerpa">Luciana Cerpa</option>
+                                                <option value="Maria Claurisleide">Maria Claurisleide</option>
+                                                <option value="Marisa de Almeida">Marisa de Almeida</option>
+                                                <option value="Matheus Dias">Matheus Dias</option>
+                                                <option value="Micheli Bezerra">Micheli Bezerra</option>
+                                                <option value="Nathalie Aron">Nathalie Aron</option>
+                                                <option value="Regilene dos Santos">Regilene dos Santos</option>
+                                                <option value="Renata Sheila">Renata Sheila</option>
+                                                <option value="Rodrigo Jorge">Rodrigo Jorge</option>
+                                                <option value="Rosana Machado">Rosana Machado</option>
+                                                <option value="Suzana Martins">Suzana Martins</option>
+                                                <option value="Thais Amaral">Thais Amaral</option>
+                                                <option value="Vanessa Pereira">Vanessa Pereira</option>
+                                                <option value="Vanessa Sgavioli">Vanessa Sgavioli</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </fieldset>
+
+                                <hr class="my-4 text-muted">
+
+                                <!-- BLOCO 6: STATUS -->
+                                <fieldset class="mb-4">
+                                    <legend class="section-title mb-3">
+                                        <i class="fa-solid fa-lock me-2"></i>Status Inicial
+                                    </legend>
+                                    
+                                    <div class="row g-3 align-items-center">
+                                        <div class="col-md-4">
+                                            <label class="form-label small text-secondary">Status</label>
+                                            <select name="status" class="form-select" style="background-color: #e9ecef; pointer-events: none;" tabindex="-1" required>
+                                                <option value="Ativo" selected>Ativo</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-8">
+                                            <p class="text-muted small mb-0">
+                                                <i class="fa-solid fa-circle-info me-1 text-info"></i>
+                                                Todo novo colaborador inicia com status <strong>Ativo</strong>. Afastamentos e desligamentos são geridos pelo Painel de RH.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </fieldset>
+
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                                    <button type="submit" class="btn btn-boticario px-5 py-2 shadow-sm">
+                                        <i class="fa-solid fa-floppy-disk me-2"></i>Salvar Cadastro
+                                    </button>
+                                </div>
+
+                            </form>
+                        </div>
+                    </div>
+                    <footer class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center opacity-75">
+                        <small class="fw-bold">Ficha sincronizada com o banco de dados</small>
+                        <small>CP FANI Sistema Operacional © 2026</small>
+                    </footer>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    (() => {
+      'use strict'
+      const forms = document.querySelectorAll('.needs-validation')
+      Array.from(forms).forEach(form => {
+        form.addEventListener('submit', event => {
+          if (!form.checkValidity()) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
+          form.classList.add('was-validated')
+        }, false)
+      })
+    })()
+</script>
+
+<script>
+    const cpfInput = document.querySelector('input[name="cpf"]');
+
+    function validarCPF(cpf) {
+        cpf = cpf.replace(/[^\d]+/g, '');
+        if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+        
+        let soma = 0;
+        for (let i = 0; i < 9; i++) soma += parseInt(cpf.charAt(i)) * (10 - i);
+        let rev = 11 - (soma % 11);
+        if (rev === 10 || rev === 11) rev = 0;
+        if (rev !== parseInt(cpf.charAt(9))) return false;
+        
+        soma = 0;
+        for (let i = 0; i < 10; i++) soma += parseInt(cpf.charAt(i)) * (11 - i);
+        rev = 11 - (soma % 11);
+        if (rev === 10 || rev === 11) rev = 0;
+        if (rev !== parseInt(cpf.charAt(10))) return false;
+        
+        return true;
+    }
+
+    cpfInput.addEventListener('input', function() {
+        const valorLimpo = this.value.replace(/[^\d]+/g, '');
+        
+        if (valorLimpo.length === 11) {
+            if (!validarCPF(valorLimpo)) {
+                this.classList.add('is-invalid');
+                this.setCustomValidity('Inválido');
+            } else {
+                this.classList.remove('is-invalid');
+                this.setCustomValidity('');
+            }
+        } else if (valorLimpo.length > 0 && valorLimpo.length < 11) {
+            this.classList.add('is-invalid'); 
+        } else {
+            this.classList.remove('is-invalid');
+        }
+    });
+</script>
+</body>
+</html>

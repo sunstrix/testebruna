@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP Fani | Agendamento de Férias</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --boticario-dark:#004D3B; --boticario-light:#00684E; --boticario-gold:#C5A059; --bg-body:#F5F2ED; }
+        body { background-color:var(--bg-body); font-family:'Inter',sans-serif; color:#333; margin:0; padding:0; overflow-x:hidden; }
+        .wrapper { display:flex; min-height:100vh; }
+ 
+        .sidebar { width:260px; background:linear-gradient(180deg,var(--boticario-dark) 0%,#003327 100%); color:white; flex-shrink:0; display:flex; flex-direction:column; box-shadow:4px 0 15px rgba(0,0,0,.05); z-index:1000; }
+        .sidebar-header { padding:24px 20px; border-bottom:1px solid rgba(255,255,255,.1); display:flex; align-items:center; gap:12px; }
+        .sidebar-menu { padding:20px 0; flex-grow:1; display:flex; flex-direction:column; gap:5px; }
+        .nav-item-side { padding:12px 24px; color:rgba(255,255,255,.7); text-decoration:none; display:flex; align-items:center; gap:15px; font-weight:500; font-size:.95rem; transition:all .2s; border-left:4px solid transparent; }
+        .nav-item-side:hover { color:white; background:rgba(255,255,255,.05); }
+        .nav-item-side.active { color:white; background:rgba(0,0,0,.15); border-left-color:var(--boticario-gold); font-weight:600; }
+        .sidebar-footer { padding:20px; border-top:1px solid rgba(255,255,255,.1); text-align:center; opacity:.7; }
+ 
+        .main-content { flex-grow:1; display:flex; flex-direction:column; min-width:0; }
+        .topbar { background:white; padding:15px 30px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 10px rgba(0,0,0,.03); }
+        .content-area { padding:30px; flex-grow:1; }
+ 
+        .card { border:none; border-radius:18px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,.05); background:white; }
+        .card-header-boticario { background:linear-gradient(90deg,var(--boticario-dark),var(--boticario-light)); color:white; font-weight:700; padding:14px 20px; }
+ 
+        .form-label, .label-detalhe { font-size:.78rem; font-weight:600; color:#555; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; }
+        .form-control, .form-select { border-radius:10px; border:1px solid #D8D8D8; font-size:.9rem; }
+        .form-control:focus, .form-select:focus { border-color:var(--boticario-light); box-shadow:0 0 0 .2rem rgba(0,104,78,.15); }
+ 
+        .btn-boticario { background:var(--boticario-light); color:white; border:none; transition:all .25s; font-weight:600; }
+        .btn-boticario:hover { background:var(--boticario-dark); color:white; transform:translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-leaf fs-4" style="color: var(--boticario-gold);"></i>
+            <div>
+                <h6 class="mb-0 fw-bold tracking-wide">CP FANI</h6>
+                <small class="opacity-75" style="font-size: 0.7rem;">RECURSOS HUMANOS</small>
+            </div>
+        </div>
+
+        <nav class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}" class="nav-item-side">
+                <i class="fa-solid fa-chart-pie fa-fw"></i> Dashboard
+            </a>
+            <a href="{{ url_for('listar_funcionarios') }}" class="nav-item-side">
+                <i class="fa-solid fa-users fa-fw"></i> Ativos
+            </a>
+            <a href="{{ url_for('listar_desligados') }}" class="nav-item-side">
+                <i class="fa-solid fa-user-xmark fa-fw"></i> Desligados
+            </a>
+            <a href="{{ url_for('relatorio_experiencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-signature fa-fw"></i> Experiência
+            </a>
+            <a href="{{ url_for('lancar_ferias_busca') }}" class="nav-item-side active">
+                <i class="fa-solid fa-plane-departure fa-fw"></i> Férias
+            </a>
+            <a href="{{ url_for('nova_ocorrencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-medical fa-fw"></i> Atestados/Faltas
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <i class="fa-solid fa-bottle-droplet opacity-50 mb-2 fs-5 d-block"></i>
+            <small style="font-size: 0.65rem;">Franquia O Boticário © 2026</small>
+        </div>
+    </aside>
+ 
+    <main class="main-content">
+        <header class="topbar">
+            <span class="fw-bold" style="color:var(--boticario-dark);">Lançamento de Férias</span>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+                </a>
+                <div class="vr opacity-25"></div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Sair
+                </a>
+            </div>
+        </header>
+ 
+        <div class="content-area">
+
+<div class="container-fluid px-4">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                    <i class="fa-solid fa-circle-info me-2"></i> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- ELEMENTO SOLICITADO: CARD SUPERIOR DE FÉRIAS JÁ AGENDADAS -->
+    {% if ferias %}
+    <div class="card border-warning mb-4 shadow-sm">
+        <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between align-items-center py-2 px-3">
+            <span><i class="fa-solid fa-calendar-check me-2"></i>Férias Agendadas Encontradas</span>
+            <span class="badge bg-dark">Período Ativo</span>
+        </div>
+        <div class="card-body bg-light py-3">
+            <div class="row align-items-center">
+                <div class="col-md-7">
+                    <p class="mb-1 text-muted small uppercase fw-bold">Período de Gozo Cadastrado:</p>
+                    <h5 class="text-dark fw-bold mb-0">
+                        <i class="fa-solid fa-calendar-day text-success me-1"></i> {{ ferias['data_inicio'] | data_br }} 
+                        até 
+                        <i class="fa-solid fa-calendar-day text-danger me-1"></i> {{ ferias['data_fim'] | data_br }}
+                    </h5>
+                </div>
+                <div class="col-md-5 text-md-end mt-2 mt-md-0">
+                    <span class="small text-muted d-block">Abono Pecuniário: <strong>{{ ferias['abono_pecuniario'] }}</strong></span>
+                </div>
+            </div>
+            {% if motivo_trava %}
+                <div class="alert alert-warning border-0 mb-0 mt-3 py-2 small d-flex align-items-center">
+                    <i class="fa-solid fa-circle-info me-2 fs-5"></i>
+                    <span>{{ motivo_trava }}</span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+
+<div class="container-fluid px-4 pb-5">
+    <div class="row g-4">
+
+        <div class="col-xl-3 col-lg-4">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header card-header-boticario">
+                    <i class="fa-solid fa-magnifying-glass me-2"></i> 1. Consultar CPF
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('lancar_ferias_busca') }}">
+                        <input type="hidden" name="buscar_cpf" value="1">
+                        <div class="mb-3">
+                            <label class="label-detalhe">Inscrição CPF</label>
+                            <input type="text" id="buscaCpf" name="cpf" class="form-control form-control-sm text-center"
+                                   placeholder="000.000.000-00" value="{{ cpf_buscado or '' }}" required>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-sm w-100 fw-bold shadow-sm">
+                            <i class="fa-solid fa-filter me-1"></i> Localizar Cadastro
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- CARD DE PERFIL EXPANDIDO COM OS CAMPOS SOLICITADOS -->
+            {% if funcionario %}
+            <div class="card shadow-sm text-center mb-3 card-profile border-0">
+                <div class="card-body py-4">
+                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto mb-3"
+                         style="width: 80px; height: 80px;">
+                        <i class="fa-solid fa-user-check fa-2x text-success"></i>
+                    </div>
+                    <h5 class="card-title mb-1 h6 fw-bold text-dark">{{ funcionario.nome }}</h5>
+                    <p class="text-muted small mb-3">CPF: {{ funcionario.cpf }}</p>
+                    
+                    <hr class="my-3 opacity-25">
+                    
+                    <!-- EXIBIÇÃO DE CAMPOS EXTRAS: LOJA E ADMISSÃO -->
+                    <div class="text-start px-2 mb-3">
+                        <div class="mb-2">
+                            <small class="text-muted d-block text-uppercase style-label" style="font-size:0.65rem; font-weight:700;">Loja / Filial</small>
+                            <span class="badge bg-secondary fw-semibold w-100 text-start py-2 px-2"><i class="fa-solid fa-shop me-1"></i> {{ funcionario.filial or 'Não Informada' }}</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block text-uppercase style-label" style="font-size:0.65rem; font-weight:700;">Data de Admissão</small>
+                            <strong class="text-dark small"><i class="fa-solid fa-calendar me-1 text-muted"></i> {{ funcionario.data_admissao | data_br }}</strong>
+                        </div>
+                    </div>
+
+                    <span class="badge bg-success px-3 py-2 text-uppercase rounded-pill fw-bold small d-block">Colaborador Ativo</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-xl-9 col-lg-8">
+            {% if funcionario %}
+            <div class="card shadow-sm border-0">
+                <div class="card-header card-header-boticario">
+                    <i class="fa-solid fa-calendar-days me-2"></i>
+                    {% if not pode_agendar %}2. Modificar Período de Descanso Vigente{% else %}2. Parâmetros do Período de Descanso{% endif %}
+                </div>
+
+                <!-- Adicionada a ID para correção do seletor JS das validações -->
+                <form id="formSalvarFerias" method="POST" action="{{ url_for('lancar_ferias_busca') }}">
+                    <div class="card-body row g-3">
+                        <input type="hidden" name="salvar_ferias" value="1">
+                        <input type="hidden" name="funcionario_id" value="{{ funcionario.id }}">
+                        
+                        <!-- Input dinâmico controlado via ID pelo clique dos botões inferiores -->
+                        <input type="hidden" name="action_type" id="form_action_type" value="{{ 'UPDATE' if not pode_agendar else 'NEW' }}">
+
+                        <div class="col-12">
+                            <div class="p-2 mb-2 bg-light rounded border-start border-4 border-success fw-bold text-dark small">
+                                <i class="fa-solid fa-business-time me-1 text-success"></i> Vigência do Período Aquisitivo (Preenchido Automaticamente)
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="label-detalhe">Início do Ciclo Aquisitivo</label>
+                                <input type="text" class="form-control form-control-sm"
+                                    value="{{ (ferias['periodo_aquisitivo_inicio'] if ferias else periodo_inicio) | data_br }}"
+                                    readonly style="background-color: #e9ecef;">
+                                <input type="hidden" name="periodo_aquisitivo_inicio"
+                                    value="{{ ferias['periodo_aquisitivo_inicio'] if ferias else periodo_inicio }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="label-detalhe">Fim do Ciclo Aquisitivo</label>
+                                <input type="text" class="form-control form-control-sm"
+                                    value="{{ (ferias['periodo_aquisitivo_fim'] if ferias else periodo_fim) | data_br }}"
+                                    readonly style="background-color: #e9ecef;">
+                                <input type="hidden" name="periodo_aquisitivo_fim"
+                                    value="{{ ferias['periodo_aquisitivo_fim'] if ferias else periodo_fim }}">
+                            </div>
+                        </div>
+
+                        <div class="col-12 mt-4">
+                            <div class="p-2 mb-2 bg-light rounded border-start border-4 border-success fw-bold text-dark small">
+                                <i class="fa-solid fa-umbrella-beach me-1 text-success"></i> Cronograma de Gozo das Férias
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="label-detalhe">Data de Início (Primeiro Dia Útil)</label>
+                            <input type="date" class="form-control form-control-sm"
+                                   value="{{ ferias['data_inicio'] if ferias else '' }}"
+                                   {% if ferias and not pode_editar %} disabled style="background-color: #e9ecef;" {% else %} name="data_inicio" required {% endif %}>
+                            
+                            {% if ferias and not pode_editar %}
+                                <input type="hidden" name="data_inicio" value="{{ ferias['data_inicio'] }}">
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="label-detalhe">Data de Término (Último Dia)</label>
+                            <input type="date" class="form-control form-control-sm"
+                                   value="{{ ferias['data_fim'] if ferias else '' }}"
+                                   {% if ferias and not pode_editar %} disabled style="background-color: #e9ecef;" {% else %} name="data_fim" required {% endif %}>
+                            
+                            {% if ferias and not pode_editar %}
+                                <input type="hidden" name="data_fim" value="{{ ferias['data_fim'] }}">
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12 mt-4">
+                            <div class="p-3 bg-light rounded border">
+                                <label class="label-detalhe d-block mb-3">
+                                    <i class="fa-solid fa-hand-holding-dollar me-1 text-success"></i> Configuração de Abono Pecuniário (Venda de Dias)
+                                </label>
+
+                                <div class="form-check form-check-inline me-4">
+                                    <input class="form-check-input" type="radio"
+                                           id="abonoNao" value="Não"
+                                           {% if not ferias or ferias['abono_pecuniario']|string == 'Não' %}checked{% endif %}
+                                           {% if ferias and not pode_editar %} disabled {% else %} name="abono_pecuniario" onclick="toggleAbono(false)" {% endif %}>
+                                    <label class="form-check-label small fw-medium" for="abonoNao">
+                                        Não (Gozo integral de 30 dias de descanso)
+                                    </label>
+                                </div>
+
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio"
+                                           id="abonoSim" value="Sim"
+                                           {% if ferias and ferias['abono_pecuniario']|string == 'Sim' %}checked{% endif %}
+                                           {% if ferias and not pode_editar %} disabled {% else %} name="abono_pecuniario" onclick="toggleAbono(true)" {% endif %}>
+                                    <label class="form-check-label small fw-medium" for="abonoSim">
+                                        Sim (Conversão de 1/3 do período em abono)
+                                    </label>
+                                </div>
+
+                                {% if ferias and not pode_editar %}
+                                    <input type="hidden" name="abono_pecuniario" value="{{ ferias['abono_pecuniario'] }}">
+                                {% endif %}
+
+                                <div id="campoDiasAbono" class="mt-3 bg-white p-3 rounded border"
+                                     style="max-width: 300px;"
+                                     {% if not (ferias and ferias['abono_pecuniario']|string == 'Sim') %}hidden{% endif %}>
+                                    <label class="label-detalhe d-block mb-1">Volume de Dias para Venda</label>
+                                    
+                                    <select class="form-select form-select-sm" {% if ferias and not pode_editar %} disabled style="background-color: #e9ecef;" {% else %} name="dias_abono" {% endif %}>
+                                        <option value="10" selected>10 dias (Padrão CLT)</option>
+                                    </select>
+                                    {% if ferias and not pode_editar %}
+                                        <input type="hidden" name="dias_abono" value="10">
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TRAVA ADAPTADA DE ACORDO COM O PERFIL VINDOM DO BACK-END -->
+                        <div class="col-12 text-end mt-4">
+                            <hr class="text-muted my-3">
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-light btn-sm me-2 fw-bold text-secondary">Voltar</a>
+
+                            {% if not pode_agendar and not pode_editar %}
+                                <!-- Caso bloqueado para operador comum (< 30 dias) -->
+                                <button type="button" class="btn btn-secondary btn-sm px-5 fw-bold shadow-sm" disabled>
+                                    <i class="fa-solid fa-lock me-1"></i> Alterações Bloqueadas (&lt; 30 dias)
+                                </button>
+                            {% elif not pode_agendar and pode_editar %}
+                                <!-- Caso tenha férias MAS o usuário é admin ou o período é >= 30 dias (Permite alterar ou cancelar) -->
+                                <div class="d-inline-flex gap-2">
+                                    <button type="submit" onclick="if(!confirm('Deseja cancelar permanentemente este agendamento de férias?')){ return false; } else { document.getElementById('form_action_type').value='CANCEL'; }" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm">
+                                        <i class="fa-solid fa-calendar-xmark me-1"></i> Cancelar Férias
+                                    </button>
+                                    <button type="submit" onclick="document.getElementById('form_action_type').value='UPDATE';" class="btn btn-warning btn-sm px-5 fw-bold text-dark shadow-sm">
+                                        <i class="fa-solid fa-rotate me-1"></i> Atualizar e Reprogramar Férias
+                                    </button>
+                                </div>
+                            {% else %}
+                                <!-- Fluxo normal de Novo Agendamento -->
+                                <button type="submit" class="btn btn-success btn-sm px-5 fw-bold shadow-sm">
+                                    <i class="fa-solid fa-check-double me-1"></i> Efetivar e Agendar Férias
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>    
+            </div>
+
+            {% else %}
+            <div class="card shadow-sm border-0 text-center py-5 bg-white text-muted">
+                <div class="card-body">
+                    <i class="fa-solid fa-user-slash fa-3x text-light-emphasis mb-3"></i>
+                    <h5 class="fw-bold text-secondary">Aguardando Seleção</h5>
+                    <p class="small mb-0">Insira o CPF do colaborador na barra lateral ou use a lista de Ativos para selecioná-lo.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        <footer class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center opacity-75">
+            <small class="fw-bold">Painel sincronizado em tempo real</small>
+            <small>CP FANI Sistema Operacional © 2026</small>
+        </footer>
+    </aside>
+</div>
+
+<script>
+function toggleAbono(mostrar) {
+    const campo = document.getElementById('campoDiasAbono');
+    if (mostrar) {
+        campo.removeAttribute('hidden');
+    } else {
+        campo.setAttribute('hidden', '');
+    }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/validacoes.js"></script>
+
+<!-- CORREÇÃO DE LOGICA JS: Direcionados especificamente para a ID do formulário correto (#formSalvarFerias) -->
+<script>
+document.getElementById('formSalvarFerias')?.addEventListener('submit', function(e) {    
+    // Ignora a validação se a ação clicada foi para Cancelar
+    if (document.getElementById('form_action_type').value === 'CANCEL') return;
+
+    const dataInicioInput = document.querySelector('input[name="data_inicio"]');
+    const dataFimAquisitivoInput = document.querySelector('input[name="periodo_aquisitivo_fim"]');
+    
+    if (dataInicioInput && dataFimAquisitivoInput && dataInicioInput.value) {
+        const dtInicio = new Date(dataInicioInput.value);
+        const dtFimAq = new Date(dataFimAquisitivoInput.value);
+
+        if (dtInicio <= dtFimAq) {
+            e.preventDefault(); 
+            alert('Atenção: A data de início das férias deve ser obrigatoriamente posterior ao fim do período aquisitivo.');
+            dataInicioInput.focus();
+        }
+    }
+});
+</script>
+<script>
+document.getElementById('formSalvarFerias')?.addEventListener('submit', function(e) {
+    if (document.getElementById('form_action_type').value === 'CANCEL') return;
+
+    const dataInicioInput = document.querySelector('input[name="data_inicio"]');
+    const dataFimInput = document.querySelector('input[name="data_fim"]');
+    
+    if(!dataInicioInput.value || !dataFimInput.value) return;
+
+    const dataInicio = new Date(dataInicioInput.value);
+    const dataFim = new Date(dataFimInput.value);
+    const abonoSim = document.getElementById('abonoSim').checked;
+    
+    const diffTime = Math.abs(dataFim - dataInicio);
+    const diasGozo = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const diasAbono = abonoSim ? 10 : 0;
+    const total = diasGozo + diasAbono;
+
+    if (total > 30) {
+        e.preventDefault(); 
+        alert('Atenção: O total de dias (Gozo + Abono) não pode ultrapassar 30 dias. Verifique os dados!');
+    } else if (diasGozo <= 0) {
+        e.preventDefault();
+        alert('Atenção: Data de término inválida.');
+    }
+});
+</script>
+</body>
+</html>

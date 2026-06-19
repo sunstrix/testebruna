@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP Fani | Alteração de Colaborador</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --boticario-dark: #004D3B;
+            --boticario-light: #00684E;
+            --boticario-gold: #C5A059;
+            --bg-body: #F5F2ED;
+        }
+        body { background-color: var(--bg-body); font-family: 'Inter', sans-serif; color: #333; margin: 0; padding: 0; overflow-x: hidden; }
+        .wrapper { display: flex; min-height: 100vh; }
+ 
+        /* SIDEBAR */
+        .sidebar { width: 260px; background: linear-gradient(180deg, var(--boticario-dark) 0%, #003327 100%); color: white; flex-shrink: 0; display: flex; flex-direction: column; box-shadow: 4px 0 15px rgba(0,0,0,0.05); z-index: 1000; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 12px; }
+        .sidebar-menu { padding: 20px 0; flex-grow: 1; display: flex; flex-direction: column; gap: 5px; }
+        .nav-item-side { padding: 12px 24px; color: rgba(255,255,255,0.7); text-decoration: none; display: flex; align-items: center; gap: 15px; font-weight: 500; font-size: 0.95rem; transition: all 0.2s; border-left: 4px solid transparent; }
+        .nav-item-side:hover { color: white; background: rgba(255,255,255,0.05); }
+        .nav-item-side.active { color: white; background: rgba(0,0,0,0.15); border-left-color: var(--boticario-gold); font-weight: 600; }
+        .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); text-align: center; opacity: 0.7; }
+ 
+        /* MAIN */
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; min-width: 0; }
+        .topbar { background: white; padding: 15px 30px; display: flex; justify-content: flex-end; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.03); z-index: 10; }
+        .content-area { padding: 30px; flex-grow: 1; }
+ 
+        /* CARDS */
+        .card { border: none; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,.05); background: white; }
+        .card-header-boticario { background: linear-gradient(90deg, var(--boticario-dark), var(--boticario-light)); color: white; font-weight: 700; padding: 14px 20px; }
+ 
+        /* FORMULÁRIO */
+        .section-title { color: var(--boticario-dark); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid var(--boticario-gold); padding-bottom: 6px; margin-top: 24px; margin-bottom: 16px; }
+        .form-label { font-size: 0.78rem; font-weight: 600; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .form-control, .form-select { border-radius: 10px; border: 1px solid #D8D8D8; font-size: 0.9rem; }
+        .form-control:focus, .form-select:focus { border-color: var(--boticario-light); box-shadow: 0 0 0 .2rem rgba(0,104,78,.15); }
+        .readonly-field { background-color: #F0EDE8 !important; border-color: #E0DDD8 !important; color: #999 !important; cursor: not-allowed; }
+        .readonly-label { color: #aaa !important; }
+        .readonly-block { background: #F9F5F1; border: 1px solid #E3DED8; border-radius: 14px; padding: 16px 20px; }
+        .readonly-block .form-control { background-color: #F0EDE8; border-color: #E0DDD8; color: #999; cursor: not-allowed; }
+ 
+        /* BOTÕES */
+        .btn-boticario { background: var(--boticario-light); color: white; border: none; transition: all .25s ease; font-weight: 600; }
+        .btn-boticario:hover { background: var(--boticario-dark); color: white; transform: translateY(-2px); }
+        fieldset { border: none; padding: 0; margin: 0; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+ 
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-leaf fs-4" style="color: var(--boticario-gold);"></i>
+            <div>
+                <h6 class="mb-0 fw-bold">CP FANI</h6>
+                <small class="opacity-75" style="font-size: 0.7rem;">RECURSOS HUMANOS</small>
+            </div>
+        </div>
+        <nav class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}" class="nav-item-side">
+                <i class="fa-solid fa-chart-pie fa-fw"></i> Dashboard
+            </a>
+            <a href="{{ url_for('listar_funcionarios') }}" class="nav-item-side active">
+                <i class="fa-solid fa-users fa-fw"></i> Ativos
+            </a>
+            <a href="{{ url_for('listar_desligados') }}" class="nav-item-side">
+                <i class="fa-solid fa-user-xmark fa-fw"></i> Desligados
+            </a>
+            <a href="{{ url_for('relatorio_experiencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-signature fa-fw"></i> Experiência
+            </a>
+            <a href="{{ url_for('lancar_ferias_busca') }}" class="nav-item-side">
+                <i class="fa-solid fa-plane-departure fa-fw"></i> Férias
+            </a>
+            <a href="{{ url_for('nova_ocorrencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-medical fa-fw"></i> Atestados/Faltas
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <i class="fa-solid fa-bottle-droplet opacity-50 mb-2 fs-5 d-block"></i>
+            <small style="font-size: 0.65rem;">Franquia O Boticário © 2026</small>
+        </div>
+    </aside>
+ 
+    <!-- MAIN -->
+    <main class="main-content">
+        <header class="topbar">
+            <div class="d-flex align-items-center gap-3">
+                <a href="{{ url_for('listar_funcionarios') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+                </a>
+                <div class="vr opacity-25"></div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Sair
+                </a>
+            </div>
+        </header>
+ 
+        <div class="content-area">
+ 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+ 
+            <!-- CABEÇALHO -->
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <div class="rounded-3 d-flex align-items-center justify-content-center"
+                     style="width:48px;height:48px;background:#E7F5EF;color:var(--boticario-light);font-size:1.1rem;flex-shrink:0;">
+                    <i class="fa-solid fa-user-pen"></i>
+                </div>
+                <div>
+                    <h4 class="fw-bold mb-0" style="color: var(--boticario-dark);">Alterar Ficha: {{ funcionario['nome'] }}</h4>
+                    <small class="text-muted">ID #{{ funcionario['id'] }} — Edite os campos e salve ao final.</small>
+                </div>
+            </div>
+ 
+            <!-- CARD FORMULÁRIO -->
+            <div class="card shadow-sm">
+                <div class="card-header card-header-boticario d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-address-card"></i> Ficha Cadastral Completa
+                </div>
+                <div class="card-body p-4">
+ 
+                    <form action="{{ url_for('editar_funcionario', id=funcionario['id']) }}" method="POST" id="formEditar" class="needs-validation" novalidate>
+ 
+                        <input type="hidden" name="status"              value="{{ funcionario['status'] }}">
+                        <input type="hidden" name="data_desligamento"   value="{{ funcionario['data_desligamento'] or '' }}">
+                        <input type="hidden" name="tipo_desligamento"   value="{{ funcionario['tipo_desligamento'] or '' }}">
+                        <input type="hidden" name="motivo_desligamento" value="{{ funcionario['motivo_desligamento'] or '' }}">
+ 
+                        <!-- ── 1. DADOS PESSOAIS ─────────────────────────── -->
+                        <fieldset class="mb-4">
+                            <legend class="section-title">
+                                <i class="fa-solid fa-id-card me-2" style="color:var(--boticario-gold);"></i>1. Dados Pessoais
+                            </legend>
+                            <div class="row g-3">
+ 
+                                <div class="col-md-6">
+                                    <label class="form-label">Nome Completo</label>
+                                    <input type="text" class="form-control" name="nome" value="{{ funcionario['nome'] }}" required>
+                                </div>
+ 
+                                <div class="col-md-3">
+                                    <label class="form-label readonly-label">CPF <i class="fa-solid fa-lock fa-xs ms-1"></i></label>
+                                    <input type="text" class="form-control readonly-field" value="{{ funcionario['cpf'] or 'N/A' }}" readonly>
+                                </div>
+ 
+                                <div class="col-md-3">
+                                    <label class="form-label readonly-label">Data de Nascimento <i class="fa-solid fa-lock fa-xs ms-1"></i></label>
+                                    <input type="text" class="form-control readonly-field" value="{{ formatar_data_br(funcionario['data_nascimento']) or 'N/A' }}" readonly>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Estado Civil</label>
+                                    <select class="form-select" name="estado_civil" required>
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'] %}
+                                        <option value="{{ op }}" {% if funcionario['estado_civil'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Sexo</label>
+                                    <select class="form-select" name="sexo" required>
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Feminino', 'Masculino', 'Não Binário', 'Outros'] %}
+                                        <option value="{{ op }}" {% if funcionario['sexo'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Raça</label>
+                                    <select class="form-select" name="raca" required>
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Amarelo', 'Branco', 'Indígena', 'Pardo', 'Preto', 'Outro'] %}
+                                        <option value="{{ op }}" {% if funcionario['raca'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Escolaridade</label>
+                                    <select class="form-select" name="escolaridade" required>
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Ensino Médio Completo', 'Ensino Técnico Completo', 'Ensino Superior Incompleto', 'Ensino Superior Completo', 'Pós Graduação Incompleta', 'Pós Graduação Completa'] %}
+                                        <option value="{{ op }}" {% if funcionario['escolaridade'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Telefone</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fa-solid fa-phone"></i></span>
+                                        <input type="text" class="form-control" name="telefone" data-mask="telefone" value="{{ funcionario['telefone'] }}">
+                                    </div>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">E-mail</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fa-solid fa-envelope"></i></span>
+                                        <input type="email" class="form-control" name="email" value="{{ funcionario['email'] }}">
+                                    </div>
+                                    <div class="invalid-feedback" id="email-feedback">E-mail com formato inválido.</div>
+                                </div>
+ 
+                            </div>
+                        </fieldset>
+ 
+                        <hr class="my-4 text-muted">
+ 
+                        <!-- ── 2. DADOS BANCÁRIOS ────────────────────────── -->
+                        <fieldset class="mb-4">
+                            <legend class="section-title">
+                                <i class="fa-solid fa-building-columns me-2" style="color:var(--boticario-gold);"></i>2. Informações Bancárias
+                            </legend>
+                            <div class="row g-3">
+ 
+                                <div class="col-md-3">
+                                    <label class="form-label">Banco</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fa-solid fa-building-columns"></i></span>
+                                        <input type="text" class="form-control" name="banco" value="{{ funcionario['banco'] }}">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Agência</label>
+                                    <input type="text" class="form-control" name="agencia" value="{{ funcionario['agencia'] }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Conta e Dígito</label>
+                                    <input type="text" class="form-control" name="conta" value="{{ funcionario['conta'] }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Modalidade</label>
+                                    <select class="form-select" name="modalidade_conta">
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Conta Corrente', 'Conta Poupança', 'Conta Salário'] %}
+                                        <option value="{{ op }}" {% if funcionario['modalidade_conta'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                            </div>
+                        </fieldset>
+ 
+                        <hr class="my-4 text-muted">
+ 
+                        <!-- ── 3. ENDEREÇO ──────────────────────────────── -->
+                        <fieldset class="mb-4">
+                            <legend class="section-title">
+                                <i class="fa-solid fa-location-dot me-2" style="color:var(--boticario-gold);"></i>3. Endereço Residencial
+                            </legend>
+                            <div class="row g-3">
+ 
+                                <div class="col-md-2">
+                                    <label class="form-label">CEP</label>
+                                    <input type="text" class="form-control" name="endereco_cep" data-mask="cep" value="{{ funcionario['endereco_cep'] }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Rua / Logradouro</label>
+                                    <input type="text" class="form-control" name="endereco_rua" value="{{ funcionario['endereco_rua'] }}">
+                                </div>
+                                <div class="col-md-1">
+                                    <label class="form-label">Nº</label>
+                                    <input type="text" class="form-control" name="endereco_num" value="{{ funcionario['endereco_num'] }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Bairro</label>
+                                    <input type="text" class="form-control" name="endereco_bairro" value="{{ funcionario['endereco_bairro'] }}">
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Cidade</label>
+                                    <input type="text" class="form-control" name="endereco_cidade" value="{{ funcionario['endereco_cidade'] }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Estado</label>
+                                    <select class="form-select" name="endereco_estado">
+                                        <option value="" disabled>UF</option>
+                                        {% for uf in ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MT','MS','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'] %}
+                                        <option value="{{ uf }}" {% if funcionario['endereco_estado'] == uf %}selected{% endif %}>{{ uf }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                            </div>
+                        </fieldset>
+ 
+                        <hr class="my-4 text-muted">
+ 
+                        <!-- ── 4. BENEFÍCIOS ────────────────────────────── -->
+                        <fieldset class="mb-4">
+                            <legend class="section-title">
+                                <i class="fa-solid fa-gift me-2" style="color:var(--boticario-gold);"></i>4. Gestão de Benefícios
+                            </legend>
+                            <div class="row g-3">
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Optou por Convênio Médico?</label>
+                                    <select class="form-select" name="optou_convenio">
+                                        <option value="" disabled>Selecione...</option>
+                                        <option value="Sim" {% if funcionario['optou_convenio'] == 'Sim' %}selected{% endif %}>Sim</option>
+                                        <option value="Não" {% if funcionario['optou_convenio'] == 'Não' %}selected{% endif %}>Não</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Utiliza TotalPass?</label>
+                                    <select class="form-select" name="totalpass">
+                                        <option value="" disabled>Selecione...</option>
+                                        <option value="Sim" {% if funcionario['totalpass'] == 'Sim' %}selected{% endif %}>Sim</option>
+                                        <option value="Não" {% if funcionario['totalpass'] == 'Não' %}selected{% endif %}>Não</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Utiliza Vale Transporte (VT)?</label>
+                                    <select class="form-select" name="vt">
+                                        <option value="" disabled>Selecione...</option>
+                                        <option value="Sim" {% if funcionario['vt'] == 'Sim' %}selected{% endif %}>Sim</option>
+                                        <option value="Não" {% if funcionario['vt'] == 'Não' %}selected{% endif %}>Não</option>
+                                    </select>
+                                </div>
+ 
+                            </div>
+                        </fieldset>
+ 
+                        <hr class="my-4 text-muted">
+ 
+                        <!-- ── 5. DADOS PROFISSIONAIS ───────────────────── -->
+                        <fieldset class="mb-4">
+                            <legend class="section-title">
+                                <i class="fa-solid fa-briefcase me-2" style="color:var(--boticario-gold);"></i>5. Dados Contratuais e de Sistema
+                            </legend>
+                            <div class="row g-3">
+ 
+                                <div class="col-md-3">
+                                    <label class="form-label readonly-label">Data de Admissão <i class="fa-solid fa-lock fa-xs ms-1"></i></label>
+                                    <input type="text" class="form-control readonly-field" value="{{ formatar_data_br(funcionario['data_admissao']) or 'N/A' }}" readonly>
+                                </div>
+ 
+                                <div class="col-md-5">
+                                    <label class="form-label">Cargo</label>
+                                    <select class="form-select" name="cargo" required>
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Analista Administrativo','Analista de Business Intelligence','Analista de Departamento Pessoal','Analista de Recrutamento e Seleção','Analista de Suporte Computacional','Analista de Treinamento','Analista Financeiro','Analista Fiscal','Assistente Administrativo','Assistente Comercial','Assistente de Inventário','Assistente de Suporte Computacional','Atendente de Venda Direta','Auxiliar Administrativo Operacional','Consultor(a) de Vendas','Consultor(a) de Vendas Coringa','Consultor(a) Responsável','Coordenador(a) de Recursos Humanos','Estagiário(a)','Estoquista','Estoquista Líder','Gerente de Compras','Gerente de Loja','Gerente de Vendas Internas','Gerente de VD','Jovem Aprendiz','Líder de Loja','Motorista','Operador(a) de Caixa','Supervisor(a) de Campo','Supervisor(a) de Logística','Supervisor(a) Interno','Supervisor(a) de Loja','Técnico(a) de Manutenção Predial'] %}
+                                        <option value="{{ op }}" {% if funcionario['cargo'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Nível Hierárquico</label>
+                                    <select class="form-select" name="nivel" required>
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Aprendiz','Estágio','Trainee','Assistente','Júnior','Pleno','Sênior','Supervisor','Coordenador','Gerente','Diretor'] %}
+                                        <option value="{{ op }}" {% if funcionario['nivel'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Área / Departamento</label>
+                                    <select class="form-select" name="area" required>
+                                        <option value="" disabled>Selecione...</option>
+                                        {% for op in ['Administrativo','BI','Comercial','Diretoria','Financeiro','Fiscal','Logística','Recursos Humanos','Suprimentos','Tecnologia'] %}
+                                        <option value="{{ op }}" {% if funcionario['area'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label">Salário Bruto (R$)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light border-end-0 text-muted" style="border-radius:10px 0 0 10px;">R$</span>
+                                        <input type="number" step="0.01" class="form-control border-start-0" name="salario"
+                                               style="border-radius:0 10px 10px 0;" value="{{ funcionario['salario'] }}">
+                                    </div>
+                                </div>
+ 
+                                <div class="col-md-4">
+                                    <label class="form-label readonly-label">Login Extranet <i class="fa-solid fa-lock fa-xs ms-1"></i></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fa-solid fa-desktop"></i></span>
+                                        <input type="text" class="form-control readonly-field" value="{{ funcionario['login_extranet'] or 'N/A' }}" readonly>
+                                    </div>
+                                </div>
+ 
+                                <div class="col-md-6">
+                                    <label class="form-label">Filial</label>
+                                    <select class="form-select" name="filial" required>
+                                        <option value="" disabled>Selecione a filial...</option>
+                                        {% for op in ['4842 - Shopping Metrópole','5152 - Shopping do Coração','6105 - Assaí Anchieta','6106 - Direita','6110 - Arouche','8001 - Dom José','11576 - D\'avó','12055 - São Bento','12056 - Marechal','12605 - Coop','12645 - Shopping Light','14120 - Arpel Matriz','14353 - Arpel Filial','20371 - Metrô Luz','21502 - Bem Barato','23000 - Outlet Imigrantes','23379 - Assaí Piraporinha','DAES','Arpel Backoffice'] %}
+                                        <option value="{{ op }}" {% if funcionario['filial'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                                <div class="col-md-6">
+                                    <label class="form-label">Gestor Direto</label>
+                                    <select class="form-select" name="gestor" required>
+                                        <option value="" disabled>Selecione o gestor...</option>
+                                        {% for op in ['Andreza Antoniassi','Camilo Unterman','Daniel Corbo','Diva Rios','Elissandra Augustinho','Fernanda Carvalho','Flavio Rafael','Isabella Almeida','Joselita Arante','Josenilda Lopes','Julia Simões','Lay Coelho','Leonardo Roscoe','Luciana Cerpa','Maria Claurisleide','Marisa de Almeida','Matheus Dias','Micheli Bezerra','Nathalie Aron','Regilene dos Santos','Renata Sheila','Rodrigo Jorge','Rosana Machado','Suzana Martins','Thais Amaral','Vanessa Pereira','Vanessa Sgavioli'] %}
+                                        <option value="{{ op }}" {% if funcionario['gestor'] == op %}selected{% endif %}>{{ op }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+ 
+                            </div>
+                        </fieldset>
+ 
+                        <hr class="my-4 text-muted">
+ 
+                        <!-- ── 6. STATUS (SOMENTE LEITURA) ──────────────── -->
+                        <fieldset class="mb-4">
+                            <legend class="section-title" style="color:#aaa; border-color:#ddd;">
+                                <i class="fa-solid fa-lock me-2"></i>6. Status e Histórico de Desligamento (Apenas Leitura)
+                            </legend>
+ 
+                            <div class="alert alert-light border d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3" style="font-size:0.85rem;">
+                                <i class="fa-solid fa-circle-info text-primary mt-1 flex-shrink-0"></i>
+                                <span>O status e o histórico de rescisão não podem ser alterados aqui. Para desligar este colaborador, utilize a rotina no painel principal.</span>
+                            </div>
+ 
+                            <div class="readonly-block">
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label readonly-label">Status do Contrato</label>
+                                        <input type="text" class="form-control" value="{{ funcionario['status'] }}" readonly>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label readonly-label">Data de Desligamento</label>
+                                        <input type="text" class="form-control" value="{{ formatar_data_br(funcionario['data_desligamento']) or 'N/A' }}" readonly>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label readonly-label">Tipo de Desligamento</label>
+                                        <input type="text" class="form-control" value="{{ funcionario['tipo_desligamento'] or 'N/A' }}" readonly>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label readonly-label">Motivo</label>
+                                        <input type="text" class="form-control" value="{{ funcionario['motivo_desligamento'] or 'N/A' }}" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        </fieldset>
+ 
+                        <!-- BOTÕES -->
+                        <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                            <a href="{{ url_for('listar_funcionarios') }}" class="btn btn-outline-secondary px-4 fw-bold rounded-pill">
+                                <i class="fa-solid fa-xmark me-1"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-boticario px-5 fw-bold rounded-pill">
+                                <i class="fa-solid fa-floppy-disk me-2"></i> Salvar Alterações Completas
+                            </button>
+                        </div>
+ 
+                    </form>
+                </div>
+            </div>
+ 
+            <footer class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center opacity-75">
+                <small class="fw-bold">Editando ficha — ID #{{ funcionario['id'] }}</small>
+                <small>CP FANI Sistema Operacional © 2026</small>
+            </footer>
+ 
+        </div>
+    </main>
+</div>
+<!-- Campo de busca restrito a números -->
+<input type="text" 
+       name="termo_busca" 
+       class="form-control" 
+       placeholder="Digite apenas números do CPF..." 
+       pattern="\d*" 
+       oninput="this.value = this.value.replace(/\D/g, '')" 
+       required>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/validacoes.js"></script>
+</body>
+</html>

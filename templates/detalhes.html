@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CP Fani | Ficha do Colaborador</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --boticario-dark: #004D3B;
+            --boticario-light: #00684E;
+            --boticario-gold: #C5A059;
+            --bg-body: #F5F2ED;
+        }
+        body { background-color: var(--bg-body); font-family: 'Inter', sans-serif; color: #333; margin: 0; padding: 0; overflow-x: hidden; }
+        .wrapper { display: flex; min-height: 100vh; }
+ 
+        /* SIDEBAR */
+        .sidebar { width: 260px; background: linear-gradient(180deg, var(--boticario-dark) 0%, #003327 100%); color: white; flex-shrink: 0; display: flex; flex-direction: column; box-shadow: 4px 0 15px rgba(0,0,0,.05); z-index: 1000; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px; }
+        .sidebar-menu { padding: 20px 0; flex-grow: 1; display: flex; flex-direction: column; gap: 5px; }
+        .nav-item-side { padding: 12px 24px; color: rgba(255,255,255,.7); text-decoration: none; display: flex; align-items: center; gap: 15px; font-weight: 500; font-size: .95rem; transition: all .2s; border-left: 4px solid transparent; }
+        .nav-item-side:hover { color: white; background: rgba(255,255,255,.05); }
+        .nav-item-side.active { color: white; background: rgba(0,0,0,.15); border-left-color: var(--boticario-gold); font-weight: 600; }
+        .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,.1); text-align: center; opacity: .7; }
+ 
+        /* MAIN */
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; min-width: 0; }
+        .topbar { background: white; padding: 15px 30px; display: flex; justify-content: flex-end; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,.03); z-index: 10; }
+        .content-area { padding: 30px; flex-grow: 1; overflow-y: auto; }
+ 
+        /* CARDS */
+        .card { border: none; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,.05); background: white; }
+        .card:hover { box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+        .card-header-boticario { background: #F9F5F1; color: var(--boticario-dark); font-weight: 700; border-bottom: 1px solid #E3DED8; padding: 14px 18px; font-size: .9rem; letter-spacing: .3px; }
+        .card-header-danger { background: #FFF0F3; color: #B02A37; font-weight: 700; border-bottom: 1px solid #F5C6CB; padding: 14px 18px; font-size: .9rem; }
+ 
+        /* FICHA */
+        .label-detalhe { color: #888; font-size: .72rem; text-transform: uppercase; font-weight: 700; margin-bottom: 3px; letter-spacing: .5px; }
+        .info-detalhe { font-size: .92rem; color: #1a1a1a; margin-bottom: 14px; font-weight: 500; word-break: break-word; }
+        .text-mono { font-family: 'Courier New', monospace; font-size: .9rem; }
+ 
+        /* PERFIL */
+        .avatar-circle { width: 90px; height: 90px; border-radius: 50%; background: #EAF4EF; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; border: 3px solid #C8E6D4; }
+ 
+        /* BOTÕES */
+        .btn-boticario { background: var(--boticario-light); color: white; border: none; transition: all .25s; font-weight: 600; }
+        .btn-boticario:hover { background: var(--boticario-dark); color: white; transform: translateY(-2px); }
+ 
+        /* EXECUTIVE BANNER */
+        .ficha-banner { background: linear-gradient(90deg, var(--boticario-dark), var(--boticario-light)); border-radius: 18px; padding: 22px 28px; color: white; margin-bottom: 24px; }
+        .ficha-banner small { color: rgba(255,255,255,.7); }
+        .ficha-banner h4, .ficha-banner p { color: white; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+ 
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fa-solid fa-leaf fs-4" style="color: var(--boticario-gold);"></i>
+            <div>
+                <h6 class="mb-0 fw-bold">CP FANI</h6>
+                <small class="opacity-75" style="font-size: .7rem;">RECURSOS HUMANOS</small>
+            </div>
+        </div>
+        <nav class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}" class="nav-item-side">
+                <i class="fa-solid fa-chart-pie fa-fw"></i> Dashboard
+            </a>
+            <a href="{{ url_for('listar_funcionarios') }}" class="nav-item-side active">
+                <i class="fa-solid fa-users fa-fw"></i> Ativos
+            </a>
+            <a href="{{ url_for('listar_desligados') }}" class="nav-item-side">
+                <i class="fa-solid fa-user-xmark fa-fw"></i> Desligados
+            </a>
+            <a href="{{ url_for('relatorio_experiencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-signature fa-fw"></i> Experiência
+            </a>
+            <a href="{{ url_for('lancar_ferias_busca') }}" class="nav-item-side">
+                <i class="fa-solid fa-plane-departure fa-fw"></i> Férias
+            </a>
+            <a href="{{ url_for('nova_ocorrencia') }}" class="nav-item-side">
+                <i class="fa-solid fa-file-medical fa-fw"></i> Atestados/Faltas
+            </a>
+            <a href="{{ url_for('auditoria') }}" class="nav-item-side">
+                <i class="fa-solid fa-shield-halved fa-fw"></i> Auditoria
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <i class="fa-solid fa-bottle-droplet opacity-50 mb-2 fs-5 d-block"></i>
+            <small style="font-size: .65rem;">Franquia O Boticário © 2026</small>
+        </div>
+    </aside>
+ 
+    <!-- MAIN -->
+    <main class="main-content">
+        <header class="topbar">
+            <div class="d-flex align-items-center gap-3">
+                <a href="{{ url_for('listar_funcionarios') }}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Voltar
+                </a>
+                <div class="vr opacity-25"></div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold">
+                    <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Sair
+                </a>
+            </div>
+        </header>
+ 
+        <div class="content-area">
+ 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}{% endif %}
+            {% endwith %}
+ 
+            <!-- BANNER FICHA -->
+            <div class="ficha-banner d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <small class="text-uppercase fw-bold d-block mb-1" style="letter-spacing: 1px;">Cadastro ID #{{ f.id }}</small>
+                    <h4 class="fw-bold mb-1">{{ f.nome }}</h4>
+                    <p class="mb-0 small opacity-75">{{ f.cargo or 'Sem cargo definido' }} · {{ f.area or 'Sem área' }} · {{ f.filial or 'Sem filial' }}</p>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    {% if f.status == 'Ativo' %}
+                        <span class="badge bg-success px-3 py-2 rounded-pill fw-bold"><i class="fa-solid fa-circle-check me-1"></i>Ativo</span>
+                    {% elif f.status == 'Afastado' %}
+                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold"><i class="fa-solid fa-circle-exclamation me-1"></i>Afastado</span>
+                    {% elif f.status == 'Férias' %}
+                        <span class="badge px-3 py-2 rounded-pill fw-bold" style="background:#C5A059; color:white;"><i class="fa-solid fa-umbrella-beach me-1"></i>Férias</span>
+                    {% else %}
+                        <span class="badge bg-danger px-3 py-2 rounded-pill fw-bold"><i class="fa-solid fa-user-xmark me-1"></i>Desligado</span>
+                    {% endif %}
+                    <a href="{{ url_for('editar_funcionario', id=f.id) }}" class="btn btn-light btn-sm fw-bold px-4 rounded-pill shadow-sm">
+                        <i class="fa-solid fa-user-pen me-1"></i> Editar
+                    </a>
+                </div>
+            </div>
+ 
+            <div class="row g-4">
+ 
+                <!-- COLUNA ESQUERDA — Perfil resumido -->
+                <div class="col-xl-3 col-lg-4">
+                    <div class="card shadow-sm text-center py-4 px-3">
+                        <div class="avatar-circle">
+                            <i class="fa-solid fa-user-tie fa-2x" style="color: var(--boticario-dark);"></i>
+                        </div>
+                        <h5 class="fw-bold text-dark mb-1" style="font-size: .95rem;">{{ f.nome }}</h5>
+                        <p class="text-muted small mb-3 fw-semibold">{{ f.cargo or 'Sem cargo' }}</p>
+ 
+                        <div class="text-start px-2">
+                            <p class="label-detalhe">Admissão</p>
+                            <p class="info-detalhe text-mono">{{ f.data_admissao | data_br | default('N/A') }}</p>
+ 
+                            <p class="label-detalhe">Salário</p>
+                            <p class="info-detalhe fw-bold" style="color: var(--boticario-dark);">
+                                R$ {{ "%.2f"|format(f.salario) if f.salario else '0,00' }}
+                            </p>
+ 
+                            <p class="label-detalhe">Login Extranet</p>
+                            <p class="info-detalhe mb-0">
+                                <code class="bg-light px-2 py-1 rounded border text-secondary small">{{ f.login_extranet or 'N/A' }}</code>
+                            </p>
+                        </div>
+                    </div>
+ 
+                    {% if f.status != 'Desligado' %}
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="{{ url_for('lancar_ferias_busca', id=f.id) }}" class="btn btn-boticario btn-sm py-2 fw-bold">
+                            <i class="fa-solid fa-umbrella-beach me-1"></i> Agendar Férias
+                        </a>
+                        <button type="button" class="btn btn-outline-danger btn-sm py-2 fw-bold" data-bs-toggle="modal" data-bs-target="#modalDesligamento">
+                            <i class="fa-solid fa-user-xmark me-1"></i> Processar Desligamento
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+ 
+                <!-- COLUNA DIREITA — Dados completos -->
+                <div class="col-xl-9 col-lg-8">
+                    <div class="row g-4">
+ 
+                        <!-- 1. Identificação Pessoal -->
+                        <div class="col-md-6">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header card-header-boticario">
+                                    <i class="fa-solid fa-user-tag me-2"></i>1. Identificação Pessoal
+                                </div>
+                                <div class="card-body row g-0 pt-3 px-3 pb-1">
+                                    <div class="col-sm-6">
+                                        <p class="label-detalhe">CPF</p>
+                                        <p class="info-detalhe text-mono">{{ f.cpf or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <p class="label-detalhe">Data de Nascimento</p>
+                                        <p class="info-detalhe text-mono">{{ f.data_nascimento | data_br | default('N/A') }}</p>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <p class="label-detalhe">Gênero</p>
+                                        <p class="info-detalhe">{{ f.sexo or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <p class="label-detalhe">Raça / Etnia</p>
+                                        <p class="info-detalhe">{{ f.raca or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <p class="label-detalhe">Estado Civil</p>
+                                        <p class="info-detalhe">{{ f.estado_civil or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="label-detalhe">Escolaridade</p>
+                                        <p class="info-detalhe">{{ f.escolaridade or 'N/A' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+ 
+                        <!-- 2. Financeiro e Benefícios -->
+                        <div class="col-md-6">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header card-header-boticario">
+                                    <i class="fa-solid fa-credit-card me-2"></i>2. Financeiro e Benefícios
+                                </div>
+                                <div class="card-body row g-0 pt-3 px-3 pb-1">
+                                    <div class="col-sm-6">
+                                        <p class="label-detalhe">Banco</p>
+                                        <p class="info-detalhe">{{ f.banco or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <p class="label-detalhe">Agência</p>
+                                        <p class="info-detalhe text-mono">{{ f.agencia or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <p class="label-detalhe">Conta</p>
+                                        <p class="info-detalhe text-mono">{{ f.conta or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="label-detalhe">Modalidade</p>
+                                        <p class="info-detalhe">{{ f.modalidade_conta or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <p class="label-detalhe">Plano de Saúde</p>
+                                        <p class="info-detalhe">{{ f.optou_convenio or 'Não' }}</p>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <p class="label-detalhe">TotalPass</p>
+                                        <p class="info-detalhe">{{ f.totalpass or 'Não' }}</p>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <p class="label-detalhe">Vale Transporte</p>
+                                        <p class="info-detalhe">{{ f.vt or 'Não' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+ 
+                        <!-- 3. Dados Contratuais -->
+                        <div class="col-12">
+                            <div class="card shadow-sm">
+                                <div class="card-header card-header-boticario">
+                                    <i class="fa-solid fa-sitemap me-2"></i>3. Dados Contratuais e Alocação
+                                </div>
+                                <div class="card-body row g-0 pt-3 px-3 pb-1">
+                                    <div class="col-md-4 col-sm-6">
+                                        <p class="label-detalhe">Cargo Formal</p>
+                                        <p class="info-detalhe fw-bold text-dark">{{ f.cargo or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-2 col-sm-6">
+                                        <p class="label-detalhe">Nível</p>
+                                        <p class="info-detalhe">{{ f.nivel or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-3 col-sm-6">
+                                        <p class="label-detalhe">Departamento</p>
+                                        <p class="info-detalhe">{{ f.area or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-3 col-sm-6">
+                                        <p class="label-detalhe">Filial</p>
+                                        <p class="info-detalhe">{{ f.filial or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-4 col-sm-6">
+                                        <p class="label-detalhe">Gestor Imediato</p>
+                                        <p class="info-detalhe">{{ f.gestor or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-4 col-sm-6">
+                                        <p class="label-detalhe">Data de Admissão</p>
+                                        <p class="info-detalhe text-mono">{{ f.data_admissao | data_br | default('N/A') }}</p>
+                                    </div>
+                                    <div class="col-md-4 col-sm-6">
+                                        <p class="label-detalhe">Salário Contratual</p>
+                                        <p class="info-detalhe fw-bold" style="color: var(--boticario-dark);">
+                                            R$ {{ "%.2f"|format(f.salario) if f.salario else '0,00' }}
+                                        </p>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="label-detalhe">Login Extranet</p>
+                                        <p class="info-detalhe">
+                                            <code class="bg-light px-2 py-1 rounded border text-secondary small">{{ f.login_extranet or 'N/A' }}</code>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+ 
+                        <!-- 4. Comunicação e Endereço -->
+                        <div class="col-12">
+                            <div class="card shadow-sm">
+                                <div class="card-header card-header-boticario">
+                                    <i class="fa-solid fa-map-location-dot me-2"></i>4. Comunicação e Endereço
+                                </div>
+                                <div class="card-body row g-0 pt-3 px-3 pb-1">
+                                    <div class="col-md-6">
+                                        <p class="label-detalhe">E-mail</p>
+                                        <p class="info-detalhe text-lowercase" style="color: var(--boticario-light);">{{ f.email or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p class="label-detalhe">Telefone</p>
+                                        <p class="info-detalhe text-mono">{{ f.telefone or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <p class="label-detalhe">Logradouro</p>
+                                        <p class="info-detalhe">{{ f.endereco_rua or 'N/A' }}, nº {{ f.endereco_num or 'S/N' }}</p>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <p class="label-detalhe">Bairro</p>
+                                        <p class="info-detalhe">{{ f.endereco_bairro or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <p class="label-detalhe">Cidade</p>
+                                        <p class="info-detalhe">{{ f.endereco_cidade or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <p class="label-detalhe">UF</p>
+                                        <p class="info-detalhe">{{ f.endereco_estado or 'N/A' }}</p>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <p class="label-detalhe">CEP</p>
+                                        <p class="info-detalhe text-mono">{{ f.endereco_cep or 'N/A' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+ 
+                        <!-- 5. Informações Rescisórias (só aparece se desligado) -->
+                        {% if f.status == 'Desligado' %}
+                        <div class="col-12">
+                            <div class="card shadow-sm" style="border: 1px solid #F5C6CB !important;">
+                                <div class="card-header card-header-danger">
+                                    <i class="fa-solid fa-user-slash me-2"></i>5. Informações Rescisórias
+                                </div>
+                                <div class="card-body row g-0 pt-3 px-3 pb-1">
+                                    <div class="col-md-4">
+                                        <p class="label-detalhe" style="color:#B02A37;">Data da Saída</p>
+                                        <p class="info-detalhe fw-bold text-danger text-mono">{{ f.data_desligamento | data_br | default('Não registrada') }}</p>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <p class="label-detalhe" style="color:#B02A37;">Modalidade</p>
+                                        <p class="info-detalhe fw-bold text-dark">{{ f.tipo_desligamento or 'Não informado' }}</p>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="label-detalhe" style="color:#B02A37;">Justificativa</p>
+                                        <p class="info-detalhe bg-light p-3 rounded border border-danger-subtle text-secondary small">
+                                            {{ f.motivo_desligamento or 'Nenhum motivo detalhado cadastrado.' }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+ 
+                    </div>
+                </div>
+            </div>
+ 
+            <footer class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center opacity-75">
+                <small class="fw-bold">Ficha sincronizada com o banco de dados</small>
+                <small>CP FANI Sistema Operacional © 2026</small>
+            </footer>
+ 
+        </div>
+    </main>
+</div>
+ 
+<!-- MODAL DESLIGAMENTO -->
+<div class="modal fade" id="modalDesligamento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content border-0 shadow" action="{{ url_for('desligar_funcionario', id=f.id) }}" method="POST">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i>Confirmar Rescisão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-4">Você está prestes a remover <strong>{{ f.nome }}</strong> do quadro de ativos.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-dark">Data de Desligamento</label>
+                    <input type="date" class="form-control" name="data_desligamento" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-dark">Tipo de Desligamento</label>
+                    <select class="form-select" name="tipo_desligamento" required>
+                        <option value="" disabled selected>Selecione...</option>
+                        <option value="DISPENSA SEM JUSTA CAUSA">Dispensa Sem Justa Causa</option>
+                        <option value="DISPENSA COM JUSTA CAUSA">Dispensa Com Justa Causa</option>
+                        <option value="PEDIDO DE DEMISSÃO">Pedido de Demissão</option>
+                        <option value="TÉRMINO DE CONTRATO">Término de Contrato</option>
+                    </select>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-bold small text-dark">Motivo / Justificativa</label>
+                    <textarea class="form-control" name="motivo_desligamento" rows="3" placeholder="Detalhes operacionais do encerramento..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 bg-light p-4 pt-0">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Confirmar Desligamento</button>
+            </div>
+        </form>
+    </div>
+</div>
+ 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/validacoes.js"></script>
+</body>
+</html>
+ 
