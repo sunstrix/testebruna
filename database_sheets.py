@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 from collections import OrderedDict
+from functools import wraps
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -46,11 +47,13 @@ TABLE_NAMES = {
 }
 
 
+# CORREÇÃO BUG 7: Adicionado @wraps para preservar __name__ e __doc__
 def retry_on_quota_error(max_retries=3, initial_delay=2):
     """
     Decorator para retry com backoff exponencial quando der erro 429 (quota exceeded).
     """
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             delay = initial_delay
             for attempt in range(max_retries):
@@ -107,7 +110,8 @@ def get_spreadsheet():
         raise ValueError("GOOGLE_SHEETS_ID não configurado nas variáveis de ambiente.")
     
     creds = get_credentials()
-    client = gspread.authorize(creds)
+    # CORREÇÃO BUG 4: Substituir gspread.authorize() por gspread.Client(auth=creds)
+    client = gspread.Client(auth=creds)
     return client.open_by_key(SPREADSHEET_ID)
 
 
@@ -210,22 +214,35 @@ class SheetsCursor:
         except gspread.exceptions.WorksheetNotFound:
             raise ValueError(f"Worksheet '{sheet_name}' não encontrada na planilha.")
     
+    # CORREÇÃO BUG 6: Usar get_all_values() para buscar cabeçalhos separadamente
     @retry_on_quota_error(max_retries=3, initial_delay=2)
     def _get_all_records(self, worksheet) -> Tuple[List[Dict], List[str]]:
         """
         Retorna todos os registros da worksheet com cache.
         Retorna (records, columns).
+        Usa get_all_values() para garantir que os cabeçalhos sejam sempre retornados,
+        mesmo quando a aba está vazia (apenas com cabeçalho).
         """
         cache_key = f"ws_{worksheet.title}"
         
         if cache_key in _cache:
             return _cache[cache_key]
         
-        records = worksheet.get_all_records()
-        columns = records[0].keys() if records else []
+        all_values = worksheet.get_all_values()
+        if not all_values:
+            _cache[cache_key] = ([], [])
+            return [], []
         
-        _cache[cache_key] = (records, list(columns))
-        return records, list(columns)
+        headers = all_values[0]
+        records = []
+        for row in all_values[1:]:
+            # Preenche com string vazia se a linha for mais curta que o header
+            padded = row + [''] * (len(headers) - len(row))
+            record = {headers[i]: padded[i] for i in range(len(headers))}
+            records.append(record)
+        
+        _cache[cache_key] = (records, headers)
+        return records, headers
     
     def _execute_select(self, sql: str, params: Tuple):
         """Executa uma query SELECT."""
@@ -275,7 +292,7 @@ class SheetsCursor:
         # Adiciona nova linha
         worksheet.append_row([values_dict.get(col, '') for col in columns])
         
-        # Invalida cache
+        # CORREÇÃO BUG 8: Invalidar cache imediatamente após INSERT
         cache_key = f"ws_{worksheet.title}"
         if cache_key in _cache:
             del _cache[cache_key]
@@ -339,7 +356,7 @@ class SheetsCursor:
             if batch_updates:
                 worksheet.batch_update(batch_updates)
         
-        # Invalida cache
+        # CORREÇÃO BUG 8: Invalidar cache imediatamente após UPDATE
         cache_key = f"ws_{worksheet.title}"
         if cache_key in _cache:
             del _cache[cache_key]
@@ -375,13 +392,14 @@ class SheetsCursor:
             worksheet.delete_rows(row_idx)
             deleted_count += 1
         
-        # Invalida cache
+        # CORREÇÃO BUG 8: Invalidar cache imediatamente após DELETE
         cache_key = f"ws_{worksheet.title}"
         if cache_key in _cache:
             del _cache[cache_key]
         
         self._rowcount = deleted_count
     
+    # CORREÇÃO BUG 3: Refatorado para usar nova assinatura com param_idx
     def _apply_where_clause(self, sql: str, params: Tuple, records: List[Dict]) -> List[Dict]:
         """Aplica a cláusula WHERE aos registros."""
         where_match = re.search(r'WHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|\s*$)', sql, re.IGNORECASE | re.DOTALL)
@@ -391,113 +409,129 @@ class SheetsCursor:
         where_clause = where_match.group(1).strip()
         
         filtered = []
-        param_idx = 0
-        
         for record in records:
-            if self._evaluate_where(where_clause, record, params, param_idx):
+            # CORREÇÃO BUG 3: _evaluate_where agora retorna (bool, next_param_idx)
+            result, _ = self._evaluate_where(where_clause, record, params, 0)
+            if result:
                 filtered.append(record)
         
         return filtered
     
-    def _evaluate_where(self, where_clause: str, record: Dict, params: Tuple, param_idx: int) -> bool:
-        """Avalia se um registro atende à cláusula WHERE."""
+    # CORREÇÃO BUG 3: Retorna tupla (bool_resultado, next_param_idx)
+    def _evaluate_where(self, where_clause: str, record: Dict, params: Tuple, param_idx: int) -> Tuple[bool, int]:
+        """
+        Avalia se um registro atende à cláusula WHERE.
+        Retorna (bool_resultado, next_param_idx).
+        """
         where_clause = re.sub(r'\s+', ' ', where_clause).strip()
         
         if ' AND ' in where_clause.upper():
             parts = re.split(r'\s+AND\s+', where_clause, flags=re.IGNORECASE)
-            return all(self._evaluate_condition(part.strip(), record, params, param_idx) for part in parts)
+            result = True
+            for part in parts:
+                cond_result, param_idx = self._evaluate_condition(part.strip(), record, params, param_idx)
+                result = result and cond_result
+            return result, param_idx
         
         if ' OR ' in where_clause.upper():
             parts = re.split(r'\s+OR\s+', where_clause, flags=re.IGNORECASE)
-            return any(self._evaluate_condition(part.strip(), record, params, param_idx) for part in parts)
+            result = False
+            for part in parts:
+                cond_result, param_idx = self._evaluate_condition(part.strip(), record, params, param_idx)
+                result = result or cond_result
+            return result, param_idx
         
         return self._evaluate_condition(where_clause, record, params, param_idx)
     
-    def _evaluate_condition(self, condition: str, record: Dict, params: Tuple, param_idx: int) -> bool:
-        """Avalia uma condição individual."""
+    # CORREÇÃO BUG 3 e BUG 9: Retorna tupla e usa re.fullmatch para LIKE
+    def _evaluate_condition(self, condition: str, record: Dict, params: Tuple, param_idx: int) -> Tuple[bool, int]:
+        """
+        Avalia uma condição individual.
+        Retorna (bool_resultado, next_param_idx).
+        """
         condition = condition.strip()
         
-        # LIKE
+        # LIKE - CORREÇÃO BUG 9: Usa re.fullmatch para match correto
         like_match = re.match(r'(\w+)\s+LIKE\s+\?', condition, re.IGNORECASE)
         if like_match:
             col = like_match.group(1)
             pattern = params[param_idx] if param_idx < len(params) else ''
             value = str(record.get(col, '') or '')
             regex_pattern = pattern.replace('%', '.*').replace('_', '.')
-            return bool(re.match(regex_pattern, value, re.IGNORECASE))
+            return bool(re.fullmatch(regex_pattern, value, re.IGNORECASE)), param_idx + 1
         
         # = ?
         eq_match = re.match(r'(\w+)\s*=\s*\?', condition, re.IGNORECASE)
         if eq_match:
             col = eq_match.group(1)
             value = params[param_idx] if param_idx < len(params) else None
-            return str(record.get(col, '')) == str(value)
+            return str(record.get(col, '')) == str(value), param_idx + 1
         
         # = 'valor'
         eq_literal_match = re.match(r'(\w+)\s*=\s*[\'"]([^\'"]+)[\'"]', condition, re.IGNORECASE)
         if eq_literal_match:
             col = eq_literal_match.group(1)
             value = eq_literal_match.group(2)
-            return str(record.get(col, '')) == value
+            return str(record.get(col, '')) == value, param_idx
         
         # != 'valor'
         neq_match = re.match(r'(\w+)\s*!=\s*[\'"]([^\'"]+)[\'"]', condition, re.IGNORECASE)
         if neq_match:
             col = neq_match.group(1)
             value = neq_match.group(2)
-            return str(record.get(col, '')) != value
+            return str(record.get(col, '')) != value, param_idx
         
         # > ?
         gt_match = re.match(r'(\w+)\s*>\s*\?', condition, re.IGNORECASE)
         if gt_match:
             col = gt_match.group(1)
             value = params[param_idx] if param_idx < len(params) else ''
-            return str(record.get(col, '')) > str(value)
+            return str(record.get(col, '')) > str(value), param_idx + 1
         
         # >= ?
         gte_match = re.match(r'(\w+)\s*>=\s*\?', condition, re.IGNORECASE)
         if gte_match:
             col = gte_match.group(1)
             value = params[param_idx] if param_idx < len(params) else ''
-            return str(record.get(col, '')) >= str(value)
+            return str(record.get(col, '')) >= str(value), param_idx + 1
         
         # < ?
         lt_match = re.match(r'(\w+)\s*<\s*\?', condition, re.IGNORECASE)
         if lt_match:
             col = lt_match.group(1)
             value = params[param_idx] if param_idx < len(params) else ''
-            return str(record.get(col, '')) < str(value)
+            return str(record.get(col, '')) < str(value), param_idx + 1
         
         # <= ?
         lte_match = re.match(r'(\w+)\s*<=\s*\?', condition, re.IGNORECASE)
         if lte_match:
             col = lte_match.group(1)
             value = params[param_idx] if param_idx < len(params) else ''
-            return str(record.get(col, '')) <= str(value)
+            return str(record.get(col, '')) <= str(value), param_idx + 1
         
-        # BETWEEN
+        # BETWEEN - CORREÇÃO BUG 3: Consome 2 parâmetros
         between_match = re.match(r'(\w+)\s+BETWEEN\s+\?\s+AND\s+\?', condition, re.IGNORECASE)
         if between_match:
             col = between_match.group(1)
             value1 = params[param_idx] if param_idx < len(params) else ''
             value2 = params[param_idx + 1] if (param_idx + 1) < len(params) else ''
             record_value = str(record.get(col, ''))
-            return value1 <= record_value <= value2
+            return value1 <= record_value <= value2, param_idx + 2
         
         # IS NULL
         is_null_match = re.match(r'(\w+)\s+IS\s+NULL', condition, re.IGNORECASE)
         if is_null_match:
             col = is_null_match.group(1)
-            return not record.get(col)
+            return not record.get(col), param_idx
         
         # IS NOT NULL
         is_not_null_match = re.match(r'(\w+)\s+IS\s+NOT\s+NULL', condition, re.IGNORECASE)
         if is_not_null_match:
             col = is_not_null_match.group(1)
-            return bool(record.get(col))
+            return bool(record.get(col)), param_idx
         
         logger.warning(f"Condição WHERE não reconhecida: {condition}")
-        return True
+        return True, param_idx
     
     def _apply_order_by(self, sql: str, records: List[Dict]) -> List[Dict]:
         """Aplica ORDER BY aos registros."""
