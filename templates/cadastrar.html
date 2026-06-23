@@ -50,6 +50,23 @@
         .btn-boticario { background: var(--boticario-light); color: white; border: none; transition: all .25s ease; font-weight: 600; }
         .btn-boticario:hover { background: var(--boticario-dark); color: white; transform: translateY(-2px); }
         fieldset { border: none; padding: 0; margin: 0; }
+        
+        /* LOADING CEP */
+        .cep-loading {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+        }
+        .cep-loading.active {
+            display: block;
+        }
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+            border-width: 0.2em;
+        }
     </style>
 </head>
 <body>
@@ -136,6 +153,7 @@
                         </div>
                         <div class="card-body p-4">
                             <form method="POST" id="formCadastro" class="needs-validation" novalidate>
+                                {{ csrf_token() }}
 
                                 <!-- BLOCO 1: DADOS PESSOAIS -->
                                 <fieldset class="mb-4">
@@ -285,12 +303,20 @@
                                     <div class="row g-3">
                                         <div class="col-md-2">
                                             <label class="form-label small">CEP</label>
-                                            <input type="text" name="endereco_cep" class="form-control" data-mask="cep" placeholder="00000-000" required value="{{ dados.endereco_cep if dados else '' }}">
+                                            <div class="position-relative">
+                                                <input type="text" name="endereco_cep" id="endereco_cep" class="form-control" data-mask="cep" placeholder="00000-000" required value="{{ dados.endereco_cep if dados else '' }}">
+                                                <div class="cep-loading" id="cep-loading">
+                                                    <div class="spinner-border spinner-border-sm text-success" role="status">
+                                                        <span class="visually-hidden">Carregando...</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="form-text text-muted">Digite o CEP para autocompletar.</div>
                                         </div>
 
                                         <div class="col-md-6">
                                             <label class="form-label small">Rua / Logradouro</label>
-                                            <input type="text" name="endereco_rua" class="form-control" required value="{{ dados.endereco_rua if dados else '' }}">
+                                            <input type="text" name="endereco_rua" id="endereco_rua" class="form-control" required value="{{ dados.endereco_rua if dados else '' }}">
                                         </div>
 
                                         <div class="col-md-1">
@@ -300,17 +326,17 @@
 
                                         <div class="col-md-3">
                                             <label class="form-label small">Bairro</label>
-                                            <input type="text" name="endereco_bairro" class="form-control" required value="{{ dados.endereco_bairro if dados else '' }}">
+                                            <input type="text" name="endereco_bairro" id="endereco_bairro" class="form-control" required value="{{ dados.endereco_bairro if dados else '' }}">
                                         </div>
 
                                         <div class="col-md-8">
                                             <label class="form-label small">Cidade</label>
-                                            <input type="text" name="endereco_cidade" class="form-control" required value="{{ dados.endereco_cidade if dados else '' }}">
+                                            <input type="text" name="endereco_cidade" id="endereco_cidade" class="form-control" required value="{{ dados.endereco_cidade if dados else '' }}">
                                         </div>
 
                                         <div class="col-md-4">
                                             <label class="form-label small">Estado</label>
-                                            <select name="endereco_estado" class="form-select" required>
+                                            <select name="endereco_estado" id="endereco_estado" class="form-select" required>
                                                 <option value="" disabled selected>UF</option>
                                                 <option value="AC">AC</option><option value="AL">AL</option><option value="AM">AM</option>
                                                 <option value="AP">AP</option><option value="BA">BA</option><option value="CE">CE</option>
@@ -636,6 +662,51 @@
             this.classList.remove('is-invalid');
         }
     });
+</script>
+
+<script>
+    // INTEGRAÇÃO COM VIA CEP
+    const cepInput = document.getElementById('endereco_cep');
+    const cepLoading = document.getElementById('cep-loading');
+    
+    let cepTimeout;
+    
+    cepInput.addEventListener('input', function() {
+        clearTimeout(cepTimeout);
+        
+        const cepLimpo = this.value.replace(/\D/g, '');
+        
+        if (cepLimpo.length === 8) {
+            cepTimeout = setTimeout(() => {
+                buscarCEP(cepLimpo);
+            }, 500);
+        }
+    });
+    
+    function buscarCEP(cep) {
+        cepLoading.classList.add('active');
+        
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.erro) {
+                    alert('CEP não encontrado.');
+                    cepLoading.classList.remove('active');
+                    return;
+                }
+                
+                document.getElementById('endereco_rua').value = data.logradouro || '';
+                document.getElementById('endereco_bairro').value = data.bairro || '';
+                document.getElementById('endereco_cidade').value = data.localidade || '';
+                document.getElementById('endereco_estado').value = data.uf || '';
+                
+                cepLoading.classList.remove('active');
+            })
+            .catch(error => {
+                console.error('Erro ao buscar CEP:', error);
+                cepLoading.classList.remove('active');
+            });
+    }
 </script>
 </body>
 </html>
