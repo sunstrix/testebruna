@@ -28,20 +28,22 @@ SCOPES = [
 
 # Estrutura das tabelas (Nome da Aba: Lista de Colunas)
 # Os nomes das abas devem bater com o mapeamento em database_sheets.py
+# CORREÇÃO BUG 1 e BUG 2: Schemas atualizados para corresponder às queries do app.py
 TABLE_SCHEMAS = {
     'Perfis': ['id', 'nome'],
-    'Usuarios': ['id', 'username', 'password_hash', 'perfil_id', 'nome_completo', 'email', 'ativo', 'data_criacao'],
+    'Usuarios': ['id', 'username', 'senha', 'perfil_id', 'nome_completo', 'email', 'ativo', 'data_criacao'],
     'Funcionarios': [
-        'id', 'cpf', 'nome', 'data_nascimento', 'data_admissao', 'data_experiencia_fim', 
-        'cargo', 'salario', 'endereco_cep', 'endereco_rua', 'endereco_numero', 
-        'endereco_bairro', 'endereco_cidade', 'endereco_estado', 'status', 
-        'data_desligamento', 'motivo_desligamento', 'email', 'telefone', 
-        'pis', 'ctps', 'serie_ctps', 'banco', 'agencia', 'conta', 'tipo_conta', 'data_criacao'
+        'id', 'cpf', 'nome', 'data_nascimento', 'estado_civil', 'telefone', 'email', 
+        'sexo', 'raca', 'escolaridade', 'banco', 'agencia', 'conta', 'modalidade_conta',
+        'endereco_rua', 'endereco_num', 'endereco_bairro', 'endereco_cidade', 
+        'endereco_estado', 'endereco_cep', 'optou_convenio', 'totalpass', 'vt', 
+        'salario', 'cargo', 'nivel', 'area', 'filial', 'gestor', 'login_extranet', 
+        'data_admissao', 'status', 'data_desligamento', 'tipo_desligamento', 'motivo_desligamento'
     ],
-    'Ferias': ['id', 'funcionario_id', 'data_inicio', 'data_fim', 'dias', 'status', 'observacoes', 'data_criacao'],
-    'Lembretes': ['id', 'tipo', 'mensagem', 'data_geracao', 'lido', 'funcionario_id'],
-    'Historico_Movimentacoes': ['id', 'funcionario_id', 'tipo', 'descricao', 'data', 'usuario_id'],
-    'Ocorrencias': ['id', 'funcionario_id', 'tipo', 'descricao', 'data', 'acao', 'usuario_id', 'data_criacao']
+    'Ferias': ['id', 'funcionario_id', 'periodo_aquisitivo_inicio', 'periodo_aquisitivo_fim', 'data_inicio', 'data_fim', 'abono_pecuniario', 'status_ferias'],
+    'Lembretes': ['id', 'funcionario_id', 'titulo', 'descricao', 'data_alerta', 'status'],
+    'Historico_Movimentacoes': ['id', 'funcionario_id', 'usuario_id', 'tipo_movimentacao', 'valor_antigo', 'valor_novo', 'observacao', 'data_evento'],
+    'Ocorrencias': ['id', 'funcionario_id', 'tipo', 'data_inicio', 'data_fim', 'quantidade_dias', 'cid', 'observacao', 'data_registro']
 }
 
 
@@ -199,7 +201,8 @@ def main():
     logger.info("=== Script de Inicialização do Essência RH (Google Sheets) ===")
     
     creds = get_credentials()
-    client = gspread.authorize(creds)
+    # CORREÇÃO BUG 4: Substituir gspread.authorize() por gspread.Client(auth=creds)
+    client = gspread.Client(auth=creds)
     
     # Pega o email da service account para compartilhamento
     service_account_email = creds.service_account_email
