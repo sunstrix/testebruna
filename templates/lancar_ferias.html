@@ -144,6 +144,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('lancar_ferias_busca') }}">
+                        {{ csrf_token() }}
                         <input type="hidden" name="buscar_cpf" value="1">
                         <div class="mb-3">
                             <label class="label-detalhe">Inscrição CPF</label>
@@ -198,6 +199,7 @@
 
                 <!-- Adicionada a ID para correção do seletor JS das validações -->
                 <form id="formSalvarFerias" method="POST" action="{{ url_for('lancar_ferias_busca') }}">
+                    {{ csrf_token() }}
                     <div class="card-body row g-3">
                         <input type="hidden" name="salvar_ferias" value="1">
                         <input type="hidden" name="funcionario_id" value="{{ funcionario.id }}">
