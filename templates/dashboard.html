@@ -284,7 +284,8 @@
                         </div>
                         <div class="card-body d-flex flex-column justify-content-between p-4">
                             <form action="/buscar_para_editar" method="POST" class="mb-4">
-                                {{ csrf_token() }}
+                                <!-- TOKEN CSRF CORRIGIDO -->
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                 <label class="form-label text-dark fw-semibold small mb-2">Localizar para Atualização Rápida:</label>
                                 <div class="input-group">
                                     <input type="text" name="termo_busca" class="form-control" placeholder="Digite o CPF..." required>
@@ -388,7 +389,8 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form action="{{ url_for('buscar_colaborador_desligar') }}" method="POST">
-                {{ csrf_token() }}
+                <!-- TOKEN CSRF CORRIGIDO -->
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="modal-body p-4">
                     <p class="small text-muted mb-4">Insira o CPF do colaborador ativo para abrir a ficha de rescisão imediata.</p>
                     <div class="mb-3">
