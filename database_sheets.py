@@ -102,17 +102,54 @@ def get_credentials() -> Credentials:
     )
 
 
+
+# Cache da instância do spreadsheet — evita reconectar a cada request Flask
+_spreadsheet_instance = None
+_spreadsheet_instance_time = None
+_SPREADSHEET_CACHE_TTL = 300  # segundos (5 minutos)
+
+
 def get_spreadsheet():
     """
     Retorna a instância da planilha Google Sheets.
+    Mantém a conexão em cache por até 5 minutos para evitar
+    reconexões a cada request e estourar a quota de leitura da API.
     """
+    global _spreadsheet_instance, _spreadsheet_instance_time
+
     if not SPREADSHEET_ID:
         raise ValueError("GOOGLE_SHEETS_ID não configurado nas variáveis de ambiente.")
-    
+
+    agora = time.time()
+    if (
+        _spreadsheet_instance is not None
+        and _spreadsheet_instance_time is not None
+        and (agora - _spreadsheet_instance_time) < _SPREADSHEET_CACHE_TTL
+    ):
+        return _spreadsheet_instance
+
     creds = get_credentials()
-    # CORREÇÃO BUG 4: Substituir gspread.authorize() por gspread.Client(auth=creds)
     client = gspread.Client(auth=creds)
-    return client.open_by_key(SPREADSHEET_ID)
+
+    # Retry do open_by_key para absorver 429 logo na abertura
+    delay = 2
+    last_exc = None
+    for attempt in range(4):
+        try:
+            spreadsheet = client.open_by_key(SPREADSHEET_ID)
+            _spreadsheet_instance = spreadsheet
+            _spreadsheet_instance_time = agora
+            return _spreadsheet_instance
+        except gspread.exceptions.APIError as e:
+            error_str = str(e)
+            if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'RATE_LIMIT_EXCEEDED' in error_str:
+                logger.warning(f"Quota exceeded ao abrir planilha. Aguardando {delay}s... (tentativa {attempt + 1}/4)")
+                time.sleep(delay)
+                delay *= 2
+                last_exc = e
+            else:
+                raise
+    raise last_exc
 
 
 class SheetsRow:
@@ -207,12 +244,41 @@ class SheetsCursor:
         return 'UNKNOWN'
     
     def _get_worksheet(self, table_name: str):
-        """Retorna a worksheet correspondente à tabela."""
+        """
+        Retorna a worksheet correspondente à tabela.
+        Cacheia instâncias de worksheet para evitar fetch_sheet_metadata()
+        a cada query — cada chamada a .worksheet() faz uma requisição HTTP.
+        """
         sheet_name = TABLE_NAMES.get(table_name, table_name)
-        try:
-            return self.spreadsheet.worksheet(sheet_name)
-        except gspread.exceptions.WorksheetNotFound:
-            raise ValueError(f"Worksheet '{sheet_name}' não encontrada na planilha.")
+        ws_instance_key = f"ws_instance_{sheet_name}"
+
+        if ws_instance_key in _cache:
+            return _cache[ws_instance_key]
+
+        delay = 2
+        last_exc = None
+        for attempt in range(4):
+            try:
+                # spreadsheet.worksheets() retorna lista local (sem req extra se metadados já carregados)
+                for ws in self.spreadsheet.worksheets():
+                    if ws.title == sheet_name:
+                        _cache[ws_instance_key] = ws
+                        return ws
+                raise gspread.exceptions.WorksheetNotFound(sheet_name)
+            except gspread.exceptions.WorksheetNotFound:
+                raise ValueError(f"Worksheet '{sheet_name}' não encontrada na planilha.")
+            except gspread.exceptions.APIError as e:
+                error_str = str(e)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "RATE_LIMIT_EXCEEDED" in error_str:
+                    logger.warning(f"Quota exceeded ao buscar worksheet. Aguardando {delay}s... (tentativa {attempt + 1}/4)")
+                    time.sleep(delay)
+                    delay *= 2
+                    last_exc = e
+                else:
+                    raise
+        if last_exc:
+            raise last_exc
+        raise ValueError(f"Worksheet '{sheet_name}' não encontrada na planilha.")
     
     # CORREÇÃO BUG 6: Usar get_all_values() para buscar cabeçalhos separadamente
     @retry_on_quota_error(max_retries=3, initial_delay=2)
