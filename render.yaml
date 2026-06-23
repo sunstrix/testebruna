@@ -13,7 +13,9 @@ services:
     
     buildCommand: pip install -r requirements.txt
     
-    startCommand: gunicorn app:app
+    # CORREÇÃO BUG 10: Adicionado --workers 2 e --timeout 120 para evitar timeout 502
+    # nas chamadas ao Google Sheets API (que podem demorar mais de 30s)
+    startCommand: gunicorn app:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
     
     envVars:
       # -------------------------------------------------------------------------
@@ -43,11 +45,12 @@ services:
       #   sync: false
       
       # Gmail SMTP
+      # CORREÇÃO BUG 5: Comentada a linha "sync: false" órfã que causava YAML inválido
       # - key: EMAIL_USER
       #   sync: false
       # 
       # - key: EMAIL_PASS
-        sync: false
+      #   sync: false
       
       # -------------------------------------------------------------------------
       # CONFIGURAÇÕES GERAIS
