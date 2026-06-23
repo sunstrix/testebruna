@@ -1,4 +1,3 @@
-@"
 """
 Módulo de integrações externas para o Essência RH.
 Todas as integrações são opcionais e controladas por variáveis de ambiente.
@@ -252,4 +251,3 @@ def disparar_alerta_geral(assunto: str, mensagem: str, destinatarios_email: Opti
     if destinatarios_email:
         corpo_email = f"Olá,\n\nO sistema Essência RH gerou o seguinte alerta:\n\nAssunto: {assunto}\n\n{mensagem}\n\nAtenciosamente,\nSistema Essência RH - CP Fani"
         enviar_email(assunto, corpo_email, destinatarios_email)
-"@ | Out-File -FilePath "$env:USERPROFILE\Desktop\testebruna\integracoes.py" -Encoding UTF8
