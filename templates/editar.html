@@ -152,7 +152,8 @@
                 <div class="card-body p-4">
  
                     <form action="{{ url_for('editar_funcionario', id=funcionario['id']) }}" method="POST" id="formEditar" class="needs-validation" novalidate>
-                        {{ csrf_token() }}
+                        <!-- TOKEN CSRF CORRIGIDO -->
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
  
                         <input type="hidden" name="status"              value="{{ funcionario['status'] }}">
                         <input type="hidden" name="data_desligamento"   value="{{ funcionario['data_desligamento'] or '' }}">
