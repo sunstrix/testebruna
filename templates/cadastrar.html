@@ -153,7 +153,8 @@
                         </div>
                         <div class="card-body p-4">
                             <form method="POST" id="formCadastro" class="needs-validation" novalidate>
-                                {{ csrf_token() }}
+                                <!-- TOKEN CSRF CORRIGIDO -->
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
                                 <!-- BLOCO 1: DADOS PESSOAIS -->
                                 <fieldset class="mb-4">
