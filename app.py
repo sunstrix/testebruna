@@ -338,11 +338,24 @@ def verificar_e_gerar_lembretes():
 
 def verify_password(stored_password, provided_password):
     """Verifica a senha usando PBKDF2-HMAC-SHA256 com salt."""
+    # Converte string hex para bytes reais
     if isinstance(stored_password, str):
-        stored_password = stored_password.encode('latin-1')
-    salt = stored_password[:32]
-    original_hash = stored_password[32:]
+        try:
+            # Tenta converter de hex string para bytes
+            stored_bytes = bytes.fromhex(stored_password)
+        except ValueError:
+            # Se não for hex, usa latin-1 como fallback (compatibilidade com senhas antigas)
+            stored_bytes = stored_password.encode('latin-1')
+    else:
+        stored_bytes = stored_password
+    
+    # Extrai salt (primeiros 32 bytes) e hash (resto)
+    salt = stored_bytes[:32]
+    original_hash = stored_bytes[32:]
+    
+    # Calcula hash da senha fornecida
     new_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, 100000)
+    
     return new_hash == original_hash
 
 @app.route('/')
