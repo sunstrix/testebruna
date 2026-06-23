@@ -1,0 +1,59 @@
+# =============================================================================
+# RENDER.COM - CONFIGURAÇÃO DE DEPLOY
+# Essência RH - CP FANI
+# =============================================================================
+
+services:
+  - type: web
+    name: essencia-rh-cpfani
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    
+    buildCommand: pip install -r requirements.txt
+    
+    startCommand: gunicorn app:app
+    
+    envVars:
+      # -------------------------------------------------------------------------
+      # SEGURANÇA DA APLICAÇÃO
+      # -------------------------------------------------------------------------
+      - key: SECRET_KEY
+        generateValue: true
+        sync: false
+      
+      # -------------------------------------------------------------------------
+      # GOOGLE SHEETS API (Persistência de Dados)
+      # -------------------------------------------------------------------------
+      - key: GOOGLE_SHEETS_ID
+        sync: false
+      
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      
+      # -------------------------------------------------------------------------
+      # INTEGRAÇÕES OPCIONAIS (Descomente se necessário)
+      # -------------------------------------------------------------------------
+      # Telegram Bot
+      # - key: TELEGRAM_BOT_TOKEN
+      #   sync: false
+      # 
+      # - key: TELEGRAM_CHAT_ID
+      #   sync: false
+      
+      # Gmail SMTP
+      # - key: EMAIL_USER
+      #   sync: false
+      # 
+      # - key: EMAIL_PASS
+        sync: false
+      
+      # -------------------------------------------------------------------------
+      # CONFIGURAÇÕES GERAIS
+      # -------------------------------------------------------------------------
+      - key: FLASK_ENV
+        value: production
+      
+      - key: PYTHON_VERSION
+        value: 3.11.0
