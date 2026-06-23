@@ -9,6 +9,7 @@ import re
 import json
 import base64
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 from collections import OrderedDict
@@ -21,9 +22,8 @@ from cachetools import TTLCache
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Cache com TTL de 30 segundos para leituras frequentes
-# A Google Sheets API tem limite de ~60 requisições/minuto
-_cache = TTLCache(maxsize=100, ttl=30)
+# Cache com TTL de 120 segundos (aumentado de 30s para reduzir requisições)
+_cache = TTLCache(maxsize=100, ttl=120)
 
 # Escopos necessários para Google Sheets API
 SCOPES = [
@@ -44,6 +44,32 @@ TABLE_NAMES = {
     'historico_movimentacoes': 'Historico_Movimentacoes',
     'ocorrencias': 'Ocorrencias'
 }
+
+
+def retry_on_quota_error(max_retries=3, initial_delay=2):
+    """
+    Decorator para retry com backoff exponencial quando der erro 429 (quota exceeded).
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except gspread.exceptions.APIError as e:
+                    error_str = str(e)
+                    if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'RATE_LIMIT_EXCEEDED' in error_str:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Quota exceeded. Retrying in {delay} seconds... (attempt {attempt + 1}/{max_retries})")
+                            time.sleep(delay)
+                            delay *= 2  # Backoff exponencial
+                        else:
+                            logger.error(f"Quota exceeded after {max_retries} retries")
+                            raise
+                    else:
+                        raise
+        return wrapper
+    return decorator
 
 
 def get_credentials() -> Credentials:
@@ -95,11 +121,9 @@ class SheetsRow:
     
     def __getitem__(self, key):
         if isinstance(key, int):
-            # Acesso por índice
             col_name = self._columns[key]
             return self._data.get(col_name)
         else:
-            # Acesso por nome de coluna
             return self._data.get(key)
     
     def __contains__(self, key):
@@ -142,6 +166,7 @@ class SheetsCursor:
     def description(self):
         return self._description
     
+    @retry_on_quota_error(max_retries=3, initial_delay=2)
     def execute(self, sql: str, params: Tuple = ()) -> 'SheetsCursor':
         """
         Executa uma query SQL na planilha Google Sheets.
@@ -185,6 +210,7 @@ class SheetsCursor:
         except gspread.exceptions.WorksheetNotFound:
             raise ValueError(f"Worksheet '{sheet_name}' não encontrada na planilha.")
     
+    @retry_on_quota_error(max_retries=3, initial_delay=2)
     def _get_all_records(self, worksheet) -> Tuple[List[Dict], List[str]]:
         """
         Retorna todos os registros da worksheet com cache.
@@ -203,9 +229,6 @@ class SheetsCursor:
     
     def _execute_select(self, sql: str, params: Tuple):
         """Executa uma query SELECT."""
-        # Parse básico de SELECT
-        # Exemplo: SELECT * FROM funcionarios WHERE status='Ativo'
-        
         # Extrai nome da tabela
         table_match = re.search(r'FROM\s+(\w+)', sql, re.IGNORECASE)
         if not table_match:
@@ -234,9 +257,6 @@ class SheetsCursor:
     
     def _execute_insert(self, sql: str, params: Tuple):
         """Executa uma query INSERT."""
-        # Parse de INSERT
-        # Exemplo: INSERT INTO funcionarios (cpf, nome, ...) VALUES (?, ?, ...)
-        
         table_match = re.search(r'INTO\s+(\w+)', sql, re.IGNORECASE)
         columns_match = re.search(r'\(([^)]+)\)\s*VALUES', sql, re.IGNORECASE)
         
@@ -262,14 +282,12 @@ class SheetsCursor:
         
         # Obtém o ID da última linha inserida
         all_values = worksheet.get_all_values()
-        self._lastrowid = len(all_values) - 1  # -1 porque a primeira linha é cabeçalho
+        self._lastrowid = len(all_values) - 1
         self._rowcount = 1
     
+    @retry_on_quota_error(max_retries=3, initial_delay=2)
     def _execute_update(self, sql: str, params: Tuple):
-        """Executa uma query UPDATE."""
-        # Parse de UPDATE
-        # Exemplo: UPDATE funcionarios SET status='Desligado' WHERE id=?
-        
+        """Executa uma query UPDATE com batch update para otimizar."""
         table_match = re.search(r'UPDATE\s+(\w+)', sql, re.IGNORECASE)
         set_match = re.search(r'SET\s+(.+?)\s+WHERE', sql, re.IGNORECASE)
         
@@ -294,7 +312,6 @@ class SheetsCursor:
                 updates[col_name] = params[param_idx]
                 param_idx += 1
             else:
-                # Valor literal
                 col_val_match = re.match(r'(\w+)\s*=\s*[\'"]?([^\'"]+)[\'"]?', part)
                 if col_val_match:
                     updates[col_val_match.group(1)] = col_val_match.group(2)
@@ -302,29 +319,44 @@ class SheetsCursor:
         # Aplica filtros WHERE
         filtered_records = self._apply_where_clause(sql, params[param_idx:], records)
         
-        # Atualiza as linhas
-        updated_count = 0
-        for record in filtered_records:
-            row_idx = records.index(record) + 2  # +2 porque linha 1 é cabeçalho e índice começa em 1
+        # Batch update: atualiza todas as linhas de uma vez
+        if filtered_records:
+            batch_updates = []
+            for record in filtered_records:
+                row_idx = records.index(record) + 2
+                
+                for col, value in updates.items():
+                    col_idx = columns.index(col) + 1
+                    # Converte índice da coluna para letra (A=1, B=2, ..., Z=26, AA=27, etc.)
+                    col_letter = self._get_column_letter(col_idx)
+                    cell_range = f"{col_letter}{row_idx}"
+                    batch_updates.append({
+                        'range': cell_range,
+                        'values': [[value]]
+                    })
             
-            for col, value in updates.items():
-                col_idx = columns.index(col) + 1
-                worksheet.update_cell(row_idx, col_idx, value)
-            
-            updated_count += 1
+            # Executa batch update (1 requisição em vez de N)
+            if batch_updates:
+                worksheet.batch_update(batch_updates)
         
         # Invalida cache
         cache_key = f"ws_{worksheet.title}"
         if cache_key in _cache:
             del _cache[cache_key]
         
-        self._rowcount = updated_count
+        self._rowcount = len(filtered_records)
     
+    def _get_column_letter(self, col_idx: int) -> str:
+        """Converte índice numérico da coluna para letra (1=A, 2=B, ..., 27=AA)."""
+        result = ""
+        while col_idx > 0:
+            col_idx, remainder = divmod(col_idx - 1, 26)
+            result = chr(65 + remainder) + result
+        return result
+    
+    @retry_on_quota_error(max_retries=3, initial_delay=2)
     def _execute_delete(self, sql: str, params: Tuple):
         """Executa uma query DELETE."""
-        # Parse de DELETE
-        # Exemplo: DELETE FROM funcionarios WHERE id=?
-        
         table_match = re.search(r'FROM\s+(\w+)', sql, re.IGNORECASE)
         if not table_match:
             raise ValueError("Query DELETE malformada.")
@@ -358,9 +390,6 @@ class SheetsCursor:
         
         where_clause = where_match.group(1).strip()
         
-        # Parse simples de condições WHERE
-        # Suporta: col = ?, col LIKE ?, col IN (...), col > ?, etc.
-        
         filtered = []
         param_idx = 0
         
@@ -371,14 +400,9 @@ class SheetsCursor:
         return filtered
     
     def _evaluate_where(self, where_clause: str, record: Dict, params: Tuple, param_idx: int) -> bool:
-        """
-        Avalia se um registro atende à cláusula WHERE.
-        Implementação simplificada que suporta os casos de uso do app.py.
-        """
-        # Remove espaços extras
+        """Avalia se um registro atende à cláusula WHERE."""
         where_clause = re.sub(r'\s+', ' ', where_clause).strip()
         
-        # Trata AND/OR (simplificado - apenas AND por enquanto)
         if ' AND ' in where_clause.upper():
             parts = re.split(r'\s+AND\s+', where_clause, flags=re.IGNORECASE)
             return all(self._evaluate_condition(part.strip(), record, params, param_idx) for part in parts)
@@ -401,24 +425,6 @@ class SheetsCursor:
             value = str(record.get(col, '') or '')
             regex_pattern = pattern.replace('%', '.*').replace('_', '.')
             return bool(re.match(regex_pattern, value, re.IGNORECASE))
-        
-        # IN (subquery simplificada)
-        in_match = re.match(r'(\w+)\s+IN\s*\(([^)]+)\)', condition, re.IGNORECASE)
-        if in_match:
-            col = in_match.group(1)
-            subquery = in_match.group(2)
-            # Implementação simplificada - assume lista de valores
-            value = record.get(col)
-            # TODO: Implementar suporte completo a subqueries
-            return True
-        
-        # NOT IN
-        not_in_match = re.match(r'(\w+)\s+NOT\s+IN\s*\(([^)]+)\)', condition, re.IGNORECASE)
-        if not_in_match:
-            col = not_in_match.group(1)
-            value = record.get(col)
-            # TODO: Implementar suporte completo
-            return True
         
         # = ?
         eq_match = re.match(r'(\w+)\s*=\s*\?', condition, re.IGNORECASE)
@@ -490,7 +496,6 @@ class SheetsCursor:
             col = is_not_null_match.group(1)
             return bool(record.get(col))
         
-        # Se não conseguiu parsear, assume True (permissivo)
         logger.warning(f"Condição WHERE não reconhecida: {condition}")
         return True
     
@@ -505,7 +510,6 @@ class SheetsCursor:
         
         def sort_key(record):
             value = record.get(col, '')
-            # Tenta converter para número se possível
             try:
                 return float(value)
             except (ValueError, TypeError):
@@ -560,16 +564,14 @@ class SheetsConnection:
     def commit(self):
         """
         Confirma as alterações.
-        No Google Sheets, as alterações são aplicadas imediatamente,
-        então este método é apenas para compatibilidade.
+        No Google Sheets, as alterações são aplicadas imediatamente.
         """
         pass
     
     def rollback(self):
         """
         Reverte as alterações.
-        Google Sheets não suporta transações nativas,
-        então este método é apenas para compatibilidade.
+        Google Sheets não suporta transações nativas.
         """
         logger.warning("Google Sheets não suporta transações. Rollback ignorado.")
     
