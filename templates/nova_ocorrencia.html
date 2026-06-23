@@ -115,7 +115,8 @@
                         <div class="card-body p-4">
  
                             <form action="/ocorrencias/nova" method="POST" id="formOcorrencia" class="needs-validation" novalidate>
-                                {{ csrf_token() }}
+                                <!-- TOKEN CSRF CORRIGIDO -->
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
  
                                 <div class="mb-3">
                                     <label class="form-label">Colaborador</label>
