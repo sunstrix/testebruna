@@ -1,4 +1,3 @@
-@"
 """
 Camada de acesso a dados via Google Sheets API.
 Substitui get_db_connection() do SQLite por uma implementação compatível
@@ -604,4 +603,3 @@ def invalidate_table_cache(table_name: str):
     cache_key = f"ws_{sheet_name}"
     if cache_key in _cache:
         del _cache[cache_key]
-"@ | Out-File -FilePath "$env:USERPROFILE\Desktop\testebruna\database_sheets.py" -Encoding UTF8
