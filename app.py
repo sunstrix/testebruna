@@ -376,6 +376,8 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['perfil'] = user['perfil_id']
+            # CORREÇÃO BUG 1: Armazenar nome completo na sessão para uso em templates
+            session['nome'] = user.get('nome_completo', user['username'])
             logger.info(f"Login bem-sucedido: {username}")
             return redirect(url_for('dashboard'))
         
