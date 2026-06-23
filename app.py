@@ -1,28 +1,69 @@
-import sqlite3
-import hashlib
-import re
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+"""
+Essência RH - Sistema de Departamento Pessoal
+Versão com Google Sheets API + Melhorias de Segurança
+"""
+
 import os
-from datetime import datetime, timezone, timedelta
+import re
 import csv
-from flask import Response
+import hashlib
+import logging
 from io import BytesIO, TextIOWrapper
+from datetime import datetime, timezone, timedelta
 from functools import wraps
-from flask import abort, session
- 
-app = Flask(__name__)
-app.secret_key = 'teste_cpFani'
- 
+
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, abort
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from dotenv import load_dotenv
+
+# Importa a nova camada de dados e integrações
+from database_sheets import get_db_connection
+import integracoes
+
+# Carrega variáveis de ambiente do arquivo .env (desenvolvimento local)
+load_dotenv()
+
 # =============================================================================
-# UTILITÁRIOS DE DATA E VALIDAÇÃO
+# CONFIGURAÇÃO DA APLICAÇÃO
+# =============================================================================
+
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'teste_cpFani_dev_only')
+
+# Configuração de logging estruturado
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Proteção CSRF global
+csrf = CSRFProtect(app)
+
+# Rate limiting para mitigar força bruta no login
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# =============================================================================
+# DECORATORS E UTILITÁRIOS
 # =============================================================================
 
 def requer_perfil(perfis_permitidos):
+    """
+    Decorator para proteger rotas baseado no perfil do usuário.
+    Perfis: 1=Administrador, 2=Operador RH, 3=Auditor
+    """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if 'user_id' not in session:
-                return redirect(url_for('login'))  # adicionar isso
+                return redirect(url_for('login'))
             if session.get('perfil') not in perfis_permitidos:
                 abort(403)
             return f(*args, **kwargs)
@@ -30,8 +71,13 @@ def requer_perfil(perfis_permitidos):
     return decorator
 
 def get_horario_brasilia():
+    """Retorna a data/hora atual no fuso horário de Brasília (UTC-3)."""
     fuso_brasilia = timezone(timedelta(hours=-3))
     return datetime.now(fuso_brasilia)
+
+# =============================================================================
+# FILTROS JINJA E HELPERS
+# =============================================================================
 
 @app.template_filter('data_br') 
 def formatar_data_br(data_str):
@@ -55,7 +101,7 @@ def formatar_data_br(data_str):
  
 def para_iso(data_str):
     """
-    Converte DD/MM/AAAA para AAAA-MM-DD (armazenamento/SQLite).
+    Converte DD/MM/AAAA para AAAA-MM-DD (armazenamento).
     Aceita qualquer dos dois formatos.
     """
     if not data_str:
@@ -70,6 +116,9 @@ def para_iso(data_str):
     except ValueError:
         pass
     return data_str
+
+# Registra os helpers no Jinja para uso direto nos templates
+app.jinja_env.globals['formatar_data_br'] = formatar_data_br
  
 def validar_cpf(cpf):
     """
@@ -109,98 +158,80 @@ def validar_email(email):
         return True 
     regex = r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$'
     return bool(re.match(regex, str(email).strip()))
- 
-# Registra os helpers no Jinja para uso direto nos templates
-app.jinja_env.globals['formatar_data_br'] = formatar_data_br
+
+# =============================================================================
+# PROCESSAMENTO DE REGRAS DE STATUS TEMPORAIS
+# =============================================================================
 
 def processar_regras_de_status_temporais(db):
     """
     Varre o banco executando a transição de estados baseada no tempo cronológico.
     Garante integridade e obedece à hierarquia de status do RH.
     """
-    # Recupera a data atual baseada no fuso de Brasília definido nos seus utilitários
     hoje = get_horario_brasilia().strftime('%Y-%m-%d')
     
     # -------------------------------------------------------------------------
     # PASSO 1: ATUALIZAÇÃO DA TABELA DE FÉRIAS
     # -------------------------------------------------------------------------
     
-    # Se hoje entrou no período de férias e estava 'Agendada', vira 'Em Gozo'
-    db.execute("""
-        UPDATE ferias 
-        SET status_ferias = 'Em Gozo' 
-        WHERE ? >= data_inicio AND ? <= data_fim AND status_ferias = 'Agendada'
-    """, (hoje, hoje))
+    # Busca todas as férias para processamento em Python
+    ferias = db.execute("SELECT id, data_inicio, data_fim, status_ferias FROM ferias").fetchall()
     
-    # Se hoje já passou da data fim e estava 'Em Gozo', vira 'Concluída'
-    db.execute("""
-        UPDATE ferias 
-        SET status_ferias = 'Concluída' 
-        WHERE ? > data_fim AND status_ferias = 'Em Gozo'
-    """, (hoje,))
+    for ferias_row in ferias:
+        # Se hoje entrou no período de férias e estava 'Agendada', vira 'Em Gozo'
+        if ferias_row['status_ferias'] == 'Agendada' and ferias_row['data_inicio'] <= hoje <= ferias_row['data_fim']:
+            db.execute("UPDATE ferias SET status_ferias = 'Em Gozo' WHERE id = ?", (ferias_row['id'],))
+        
+        # Se hoje já passou da data fim e estava 'Em Gozo', vira 'Concluída'
+        elif ferias_row['status_ferias'] == 'Em Gozo' and hoje > ferias_row['data_fim']:
+            db.execute("UPDATE ferias SET status_ferias = 'Concluída' WHERE id = ?", (ferias_row['id'],))
     
     # -------------------------------------------------------------------------
     # PASSO 2: ATUALIZAÇÃO DA TABELA DE FUNCIONÁRIOS (A MÁQUINA DE ESTADOS)
     # -------------------------------------------------------------------------
     
-    # A. GATILHO DE AFASTAMENTO: Se há ocorrência do tipo 'AFASTAMENTO' ativa hoje
-    # Nota: Filtramos 'Desligado' para impedir que o sistema altere ex-funcionários
-    db.execute("""
-        UPDATE funcionarios 
-        SET status = 'Afastado' 
-        WHERE status != 'Desligado' 
-          AND id IN (
-              SELECT funcionario_id 
-              FROM ocorrencias 
-              WHERE tipo = 'AFASTAMENTO' AND ? >= data_inicio AND ? <= data_fim
-          )
-    """, (hoje, hoje))
+    # Busca todas as ocorrências e férias para processamento
+    ocorrencias = db.execute("SELECT funcionario_id, data_inicio, data_fim, tipo FROM ocorrencias").fetchall()
+    ferias_gozo = db.execute("SELECT funcionario_id FROM ferias WHERE status_ferias = 'Em Gozo'").fetchall()
     
-    # B. GATILHO DE FÉRIAS: Se possui férias 'Em Gozo' e não está sob a regra de Afastado
-    db.execute("""
-        UPDATE funcionarios 
-        SET status = 'Férias' 
-        WHERE status != 'Desligado' 
-          AND status != 'Afastado'
-          AND id IN (
-              SELECT funcionario_id 
-              FROM ferias 
-              WHERE status_ferias = 'Em Gozo'
-          )
-    """, ())
+    funcionarios_ids_afastamento = set()
+    for oc in ocorrencias:
+        if oc['tipo'] == 'AFASTAMENTO' and oc['data_inicio'] <= hoje <= oc['data_fim']:
+            funcionarios_ids_afastamento.add(oc['funcionario_id'])
     
-    # C. RETORNO AO ESTADO ATIVO: Se o funcionário está marcado como 'Férias' ou 'Afastado', 
-    # mas o período do evento já expirou na data de hoje, ele volta a ser 'Ativo'
-    db.execute("""
-        UPDATE funcionarios 
-        SET status = 'Ativo' 
-        WHERE status IN ('Férias', 'Afastado')
-          AND id NOT IN (
-              SELECT funcionario_id FROM ferias WHERE status_ferias = 'Em Gozo'
-          )
-          AND id NOT IN (
-              SELECT funcionario_id FROM ocorrencias WHERE tipo = 'AFASTAMENTO' AND ? >= data_inicio AND ? <= data_fim
-          )
-    """, (hoje, hoje))
+    funcionarios_ids_ferias = set(f['funcionario_id'] for f in ferias_gozo)
+    
+    # Busca todos os funcionários para processamento
+    funcionarios = db.execute("SELECT id, status FROM funcionarios").fetchall()
+    
+    for func in funcionarios:
+        func_id = func['id']
+        status_atual = func['status']
+        
+        # A. GATILHO DE AFASTAMENTO
+        if func_id in funcionarios_ids_afastamento and status_atual != 'Desligado':
+            db.execute("UPDATE funcionarios SET status = 'Afastado' WHERE id = ?", (func_id,))
+        
+        # B. GATILHO DE FÉRIAS
+        elif func_id in funcionarios_ids_ferias and status_atual not in ['Desligado', 'Afastado']:
+            db.execute("UPDATE funcionarios SET status = 'Férias' WHERE id = ?", (func_id,))
+        
+        # C. RETORNO AO ESTADO ATIVO
+        elif status_atual in ['Férias', 'Afastado']:
+            if func_id not in funcionarios_ids_ferias and func_id not in funcionarios_ids_afastamento:
+                db.execute("UPDATE funcionarios SET status = 'Ativo' WHERE id = ?", (func_id,))
     
     db.commit()
- 
-# =============================================================================
-# BANCO DE DADOS
-# =============================================================================
- 
-def get_db_connection():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    db_path = os.path.join(base_dir, 'database.db')
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
- 
+
 # =============================================================================
 # LEMBRETES AUTOMÁTICOS
 # =============================================================================
- 
+
 def verificar_e_gerar_lembretes():
+    """
+    Verifica condições para gerar lembretes automáticos (experiência, férias, aniversários).
+    Integra com o módulo de notificações (Telegram/Email) quando um novo lembrete é criado.
+    """
     db = get_db_connection()
     hoje = get_horario_brasilia().date()
     funcionarios = db.execute('SELECT id, nome, data_admissao, data_nascimento FROM funcionarios').fetchall()
@@ -214,36 +245,54 @@ def verificar_e_gerar_lembretes():
                                      (90, "Vencimento de Experiência (90 dias)")]:
                     d_alvo = adm + timedelta(days=dias)
                     if hoje <= d_alvo <= (hoje + timedelta(days=7)):
-                        existe = db.execute(
-                            "SELECT id FROM lembretes WHERE funcionario_id=? AND titulo=? AND status='Ativo'",
-                            (f['id'], titulo)).fetchone()
+                        # Busca lembretes existentes
+                        lembretes = db.execute(
+                            "SELECT id, titulo, status FROM lembretes WHERE funcionario_id = ?",
+                            (f['id'],)).fetchall()
+                        
+                        existe = any(l['titulo'] == titulo and l['status'] == 'Ativo' for l in lembretes)
+                        
                         if not existe:
-                            with db:
-                                db.execute(
-                                    "INSERT INTO lembretes (funcionario_id,titulo,descricao,data_alerta,status) VALUES(?,?,?,?,'Ativo')",
-                                    (f['id'], titulo,
-                                     f"Avaliar contrato de {f['nome']} — prazo de {dias} dias.",
-                                     d_alvo.isoformat()))
+                            db.execute(
+                                "INSERT INTO lembretes (funcionario_id, titulo, descricao, data_alerta, status) VALUES (?, ?, ?, ?, 'Ativo')",
+                                (f['id'], titulo,
+                                 f"Avaliar contrato de {f['nome']} — prazo de {dias} dias.",
+                                 d_alvo.isoformat()))
+                            
+                            # Dispara alerta externo
+                            integracoes.disparar_alerta_geral(
+                                titulo,
+                                f"Avaliar contrato de {f['nome']} — prazo de {dias} dias."
+                            )
  
                 dVenc = adm + timedelta(days=320)
                 if hoje >= dVenc:
-                    com_ferias = db.execute(
-                        "SELECT id FROM ferias WHERE funcionario_id=? AND status_ferias='Agendada'",
-                        (f['id'],)).fetchone()
+                    ferias = db.execute(
+                        "SELECT id, status_ferias FROM ferias WHERE funcionario_id = ?",
+                        (f['id'],)).fetchall()
+                    com_ferias = any(fe['status_ferias'] == 'Agendada' for fe in ferias)
+                    
                     if not com_ferias:
                         titulo_alerta = "Alerta Crítico: Vencimento de Férias"
-                        existe = db.execute(
-                            "SELECT id FROM lembretes WHERE funcionario_id=? AND titulo=? AND status='Ativo'",
-                            (f['id'], titulo_alerta)).fetchone()
+                        lembretes = db.execute(
+                            "SELECT id, titulo, status FROM lembretes WHERE funcionario_id = ?",
+                            (f['id'],)).fetchall()
+                        existe = any(l['titulo'] == titulo_alerta and l['status'] == 'Ativo' for l in lembretes)
+                        
                         if not existe:
-                            with db:
-                                db.execute(
-                                    "INSERT INTO lembretes (funcionario_id,titulo,descricao,data_alerta,status) VALUES(?,?,?,?,'Ativo')",
-                                    (f['id'], titulo_alerta,
-                                     f"{f['nome']} está prestes a vencer o período aquisitivo sem férias programadas.",
-                                     hoje.isoformat()))
+                            db.execute(
+                                "INSERT INTO lembretes (funcionario_id, titulo, descricao, data_alerta, status) VALUES (?, ?, ?, ?, 'Ativo')",
+                                (f['id'], titulo_alerta,
+                                 f"{f['nome']} está prestes a vencer o período aquisitivo sem férias programadas.",
+                                 hoje.isoformat()))
+                            
+                            # Dispara alerta externo
+                            integracoes.disparar_alerta_geral(
+                                titulo_alerta,
+                                f"{f['nome']} está prestes a vencer o período aquisitivo sem férias programadas."
+                            )
             except Exception as e:
-                print(f"Erro ao processar alertas para ID {f['id']}: {e}")
+                logger.error(f"Erro ao processar alertas para ID {f['id']}: {e}")
  
         if f['data_nascimento']:
             try:
@@ -254,38 +303,54 @@ def verificar_e_gerar_lembretes():
  
                 if hoje <= aniversario_atual <= (hoje + timedelta(days=7)):
                     titulo_alerta = "Aniversariante do Dia!" if aniversario_atual == hoje else "Aniversário Próximo"
-                    existe = db.execute(
-                        "SELECT id FROM lembretes WHERE funcionario_id=? AND titulo LIKE 'Aniversário%' AND data_alerta=? AND status='Ativo'",
-                        (f['id'], aniversario_atual.isoformat())).fetchone()
+                    
+                    lembretes = db.execute(
+                        "SELECT id, titulo, data_alerta, status FROM lembretes WHERE funcionario_id = ?",
+                        (f['id'],)).fetchall()
+                    
+                    existe = any(
+                        'Aniversário' in l['titulo'] and 
+                        l['data_alerta'] == aniversario_atual.isoformat() and 
+                        l['status'] == 'Ativo' 
+                        for l in lembretes
+                    )
+                    
                     if not existe:
                         msg = (f"Hoje é o aniversário de {f['nome']}!" if aniversario_atual == hoje
                                else f"{f['nome']} fará aniversário em {aniversario_atual.strftime('%d/%m')}.")
-                        with db:
-                            db.execute(
-                                "INSERT INTO lembretes (funcionario_id,titulo,descricao,data_alerta,status) VALUES(?,?,?,?,'Ativo')",
-                                (f['id'], titulo_alerta, msg, aniversario_atual.isoformat()))
+                        db.execute(
+                            "INSERT INTO lembretes (funcionario_id, titulo, descricao, data_alerta, status) VALUES (?, ?, ?, ?, 'Ativo')",
+                            (f['id'], titulo_alerta, msg, aniversario_atual.isoformat()))
+                        
+                        # Dispara alerta externo
+                        integracoes.disparar_alerta_geral(
+                            titulo_alerta,
+                            msg
+                        )
             except Exception as e:
-                print(f"Erro ao processar aniversário para ID {f['id']}: {e}")
+                logger.error(f"Erro ao processar aniversário para ID {f['id']}: {e}")
  
     db.close()
- 
+
 # =============================================================================
 # AUTENTICAÇÃO
 # =============================================================================
- 
+
 def verify_password(stored_password, provided_password):
+    """Verifica a senha usando PBKDF2-HMAC-SHA256 com salt."""
     if isinstance(stored_password, str):
         stored_password = stored_password.encode('latin-1')
     salt = stored_password[:32]
     original_hash = stored_password[32:]
     new_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, 100000)
     return new_hash == original_hash
- 
+
 @app.route('/')
 def index():
     return redirect(url_for('login'))
- 
+
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")  # Rate limiting para mitigar força bruta
 def login():
     if request.method == 'POST':
         username = request.form['username']
@@ -293,23 +358,28 @@ def login():
         db = get_db_connection()
         user = db.execute('SELECT * FROM usuarios WHERE username = ?', (username,)).fetchone()
         db.close()
+        
         if user and verify_password(user['senha'], password):
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['perfil'] = user['perfil_id']
+            logger.info(f"Login bem-sucedido: {username}")
             return redirect(url_for('dashboard'))
+        
+        logger.warning(f"Tentativa de login falhou para: {username}")
         flash('Usuário ou senha inválidos.', 'danger')
+    
     return render_template('login.html')
- 
+
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
- 
+
 # =============================================================================
 # DASHBOARD
 # =============================================================================
- 
+
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
@@ -320,45 +390,55 @@ def dashboard():
     db = get_db_connection()
     hoje = get_horario_brasilia().date()
     mes_atual_str = hoje.strftime('%m')
-    ano_atual_str = hoje.strftime('%Y') # Isolado em variável para não repetir código
+    ano_atual_str = hoje.strftime('%Y')
  
     processar_regras_de_status_temporais(db)
     
-    count_ativos = db.execute("SELECT COUNT(*) FROM funcionarios WHERE status='Ativo'").fetchone()[0]
+    # Busca todos os funcionários para processamento em Python
+    todos_funcionarios = db.execute("SELECT * FROM funcionarios").fetchall()
     
-    count_admitidos = db.execute(
-        "SELECT COUNT(*) FROM funcionarios WHERE strftime('%m',data_admissao)=? AND strftime('%Y',data_admissao)=?",
-        (mes_atual_str, ano_atual_str)).fetchone()[0]
-        
-    count_desligados = db.execute(
-        "SELECT COUNT(*) FROM funcionarios WHERE status='Desligado' AND strftime('%m',data_desligamento)=? AND strftime('%Y',data_desligamento)=?",
-        (mes_atual_str, ano_atual_str)).fetchone()[0]
- 
-    count_ocorrencias = db.execute(
-        "SELECT COUNT(*) FROM ocorrencias WHERE strftime('%m', data_inicio)=? AND strftime('%Y', data_inicio)=?",
-        (mes_atual_str, ano_atual_str)).fetchone()[0]
+    count_ativos = sum(1 for f in todos_funcionarios if f['status'] == 'Ativo')
+    
+    count_admitidos = sum(
+        1 for f in todos_funcionarios 
+        if f['data_admissao'] and 
+           f['data_admissao'][5:7] == mes_atual_str and 
+           f['data_admissao'][0:4] == ano_atual_str
+    )
+    
+    count_desligados = sum(
+        1 for f in todos_funcionarios 
+        if f['status'] == 'Desligado' and 
+           f['data_desligamento'] and 
+           f['data_desligamento'][5:7] == mes_atual_str and 
+           f['data_desligamento'][0:4] == ano_atual_str
+    )
+    
+    # Busca ocorrências do mês
+    todas_ocorrencias = db.execute("SELECT * FROM ocorrencias").fetchall()
+    count_ocorrencias = sum(
+        1 for oc in todas_ocorrencias 
+        if oc['data_inicio'] and 
+           oc['data_inicio'][5:7] == mes_atual_str and 
+           oc['data_inicio'][0:4] == ano_atual_str
+    )
 
-    funcionarios_ativos = db.execute(
-        "SELECT id, nome, data_nascimento, data_admissao FROM funcionarios WHERE status='Ativo'"
-    ).fetchall()
+    funcionarios_ativos = [f for f in todos_funcionarios if f['status'] == 'Ativo']
  
-    # 1. Busca os dados dos aniversariantes do banco
-    query = """
-        SELECT id, nome, data_nascimento, 
-            strftime('%d', data_nascimento) as dia
-        FROM funcionarios 
-        WHERE status = 'Ativo' 
-        AND strftime('%m', data_nascimento) = ?
-        ORDER BY CAST(dia AS INTEGER) ASC
-    """
-    resultados = db.execute(query, (mes_atual_str,)).fetchall()
-
-    # 2. Processa os aniversariantes para o formato do HTML
+    # Aniversariantes do mês
     aniversariantes = []
-    for row in resultados:
-        func = dict(row)
-        func['data_completa'] = f"{func['dia'].zfill(2)}/{mes_atual_str}"
-        aniversariantes.append(func)
+    for f in funcionarios_ativos:
+        if f['data_nascimento'] and f['data_nascimento'][5:7] == mes_atual_str:
+            dia = f['data_nascimento'][8:10]
+            aniversariantes.append({
+                'id': f['id'],
+                'nome': f['nome'],
+                'data_nascimento': f['data_nascimento'],
+                'dia': dia,
+                'data_completa': f"{dia.zfill(2)}/{mes_atual_str}"
+            })
+    
+    aniversariantes.sort(key=lambda x: int(x['dia']))
  
     # Alerta de vencimento de férias
     alerta_vencimento = []
@@ -367,31 +447,32 @@ def dashboard():
             if f['data_admissao']:
                 adm = datetime.strptime(para_iso(f['data_admissao']), '%Y-%m-%d').date()
                 if (hoje - adm).days >= 320:
-                    tem_ferias = db.execute(
-                        "SELECT id FROM ferias WHERE funcionario_id=? AND status_ferias='Agendada'",
-                        (f['id'],)).fetchone()
+                    ferias_func = db.execute(
+                        "SELECT id, status_ferias FROM ferias WHERE funcionario_id = ?",
+                        (f['id'],)).fetchall()
+                    tem_ferias = any(fe['status_ferias'] == 'Agendada' for fe in ferias_func)
+                    
                     if not tem_ferias:
                         alerta_vencimento.append(f)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Erro ao verificar vencimento de férias para ID {f['id']}: {e}")
             continue
  
     # Saídas próxima semana
     proxima_semana = (hoje + timedelta(days=7)).strftime('%Y-%m-%d')
-    # 1. Busca do banco
-    resultados_saidas = db.execute('''
-        SELECT f.nome, fe.data_inicio FROM ferias fe
-        JOIN funcionarios f ON fe.funcionario_id = f.id
-        WHERE f.status='Ativo' AND fe.data_inicio BETWEEN date('now') AND ?
-    ''', (proxima_semana,)).fetchall()
-    # 2. Processa para o formato DD/MM
+    todas_ferias = db.execute("SELECT * FROM ferias").fetchall()
+    
     saidas_breve = []
-    for row in resultados_saidas:
-        item = dict(row)
-        # Converte a string YYYY-MM-DD para objeto datetime e formata como DD/MM
-        if item['data_inicio']:
-            dt = datetime.strptime(item['data_inicio'], '%Y-%m-%d')
-            item['data_formatada'] = dt.strftime('%d/%m')
-        saidas_breve.append(item)
+    for fe in todas_ferias:
+        func = next((f for f in todos_funcionarios if f['id'] == fe['funcionario_id']), None)
+        if func and func['status'] == 'Ativo' and fe['data_inicio']:
+            if hoje.strftime('%Y-%m-%d') <= fe['data_inicio'] <= proxima_semana:
+                dt = datetime.strptime(fe['data_inicio'], '%Y-%m-%d')
+                saidas_breve.append({
+                    'nome': func['nome'],
+                    'data_inicio': fe['data_inicio'],
+                    'data_formatada': dt.strftime('%d/%m')
+                })
  
     # Alertas de experiência
     alertas_experiencia = []
@@ -403,6 +484,7 @@ def dashboard():
                 
                 if dias_corridos > 90:
                     continue
+                
                 if 40 <= dias_corridos <= 45:
                     f_dict = dict(f)
                     f_dict['mensagem_exp'] = f"Fase 1 (45 dias) vence em {45 - dias_corridos} dia(s)!"
@@ -412,7 +494,7 @@ def dashboard():
                     f_dict['mensagem_exp'] = f"Contrato Final (90 dias) vence em {90 - dias_corridos} dia(s)!"
                     alertas_experiencia.append(f_dict)
         except Exception as e:
-            print(f"Erro no alerta de experiência para o ID {f.get('id')}: {e}")
+            logger.error(f"Erro no alerta de experiência para o ID {f.get('id')}: {e}")
             continue
  
     db.close()
@@ -428,43 +510,54 @@ def dashboard():
                            aniversariantes=aniversariantes,
                            alerta_vencimento=alerta_vencimento,
                            saidas_breve=saidas_breve)
- 
+
 # =============================================================================
 # EXPORTAÇÃO
 # =============================================================================
- 
+
 @app.route('/exportar_aniversariantes_mes')
 @requer_perfil([1, 2])
 def exportar_aniversariantes_mes():
     if 'user_id' not in session:
         return "Acesso negado!", 401
+    
     db = get_db_connection()
     mes_atual_str = get_horario_brasilia().strftime('%m')
-    funcionarios = db.execute("""
-        SELECT nome, cargo, filial, data_nascimento FROM funcionarios
-        WHERE strftime('%m', data_nascimento) = ? AND status = 'Ativo'
-        ORDER BY strftime('%d', data_nascimento) ASC
-    """, (mes_atual_str,)).fetchall()
+    funcionarios = db.execute("SELECT * FROM funcionarios WHERE status = 'Ativo'").fetchall()
     db.close()
+ 
+    # Filtra aniversariantes do mês em Python
+    aniversariantes = [
+        f for f in funcionarios 
+        if f['data_nascimento'] and f['data_nascimento'][5:7] == mes_atual_str
+    ]
+    
+    # Ordena por dia
+    aniversariantes.sort(key=lambda x: int(x['data_nascimento'][8:10]))
  
     output = BytesIO()
     output.write(b'\xef\xbb\xbf')
     stream = TextIOWrapper(output, encoding='utf-8', newline='')
     writer = csv.writer(stream, delimiter=';', quoting=csv.QUOTE_MINIMAL)
     writer.writerow(['Nome', 'Cargo', 'Filial', 'Data de Aniversário'])
-    for f in funcionarios:
-        writer.writerow([f['nome'], f['cargo'], f['filial'],
-                         formatar_data_br(f['data_nascimento'])])
+    
+    for f in aniversariantes:
+        writer.writerow([
+            f['nome'], 
+            f.get('cargo', ''), 
+            f.get('filial', ''),
+            formatar_data_br(f['data_nascimento'])
+        ])
+    
     stream.flush()
     output.seek(0)
     return Response(output.getvalue(), mimetype="text/csv",
                     headers={"Content-disposition": "attachment; filename=aniversariantes_do_mes.csv"})
- 
- 
+
 # =============================================================================
 # CADASTRO
 # =============================================================================
- 
+
 @app.route('/cadastrar', methods=['GET', 'POST'])
 @requer_perfil([1, 2])
 def cadastrar():
@@ -477,7 +570,7 @@ def cadastrar():
         nome       = request.form.get('nome', '').strip()
         email      = request.form.get('email', '').strip()
  
-        # ── Validações do backend (segunda barreira após o JS) ──────────────
+        # Validações do backend
         erros = []
         if not validar_cpf(cpf):
             erros.append('CPF inválido. Verifique os dígitos informados.')
@@ -490,7 +583,6 @@ def cadastrar():
             for e in erros:
                 flash(e, 'danger')
             return redirect(url_for('cadastrar'))
-        # ────────────────────────────────────────────────────────────────────
  
         # Datas: garante armazenamento ISO independente do que veio do form
         data_nascimento = para_iso(request.form.get('data_nascimento', ''))
@@ -554,16 +646,17 @@ def cadastrar():
             flash('Funcionário cadastrado com sucesso!', 'success')
             return redirect(url_for('listar_funcionarios'))
         except Exception as e:
+            logger.error(f"Erro ao cadastrar no banco de dados: {e}")
             return f"Erro ao cadastrar no banco de dados: {e}"
         finally:
             db.close()
  
     return render_template('cadastrar.html')
- 
+
 # =============================================================================
 # LISTAGEM
 # =============================================================================
- 
+
 @app.route('/funcionarios')
 @requer_perfil([1, 2])
 def listar_funcionarios():
@@ -577,40 +670,36 @@ def listar_funcionarios():
     funcionarios = []
     
     if termo_busca:
-        # Se o usuário digitou algo, vamos buscar
-        # Lógica: Se tem dígitos, tenta buscar por CPF ou Nome. Se não tem, busca só por Nome.
-        if termo_limpo:
-            # Tem números, pode ser CPF ou Nome (ex: "Maria 123")
-            query = """SELECT id,nome,cpf,cargo,data_admissao,status 
-                       FROM funcionarios 
-                       WHERE status='Ativo' AND (nome LIKE ? OR cpf LIKE ?) 
-                       ORDER BY nome"""
-            params = (f"%{termo_busca}%", f"%{termo_limpo}%")
-        else:
-            # Só tem texto, busca apenas por Nome
-            query = """SELECT id,nome,cpf,cargo,data_admissao,status 
-                       FROM funcionarios 
-                       WHERE status='Ativo' AND nome LIKE ? 
-                       ORDER BY nome"""
-            params = (f"%{termo_busca}%",)
-            
-        funcionarios = db.execute(query, params).fetchall()
+        # Busca todos os funcionários ativos
+        todos = db.execute("SELECT * FROM funcionarios WHERE status='Ativo'").fetchall()
         
-        # Feedback se nada for encontrado
+        # Filtra em Python
+        for f in todos:
+            if termo_limpo:
+                # Busca por CPF ou Nome
+                cpf_limpo = re.sub(r'\D', '', str(f.get('cpf', '')))
+                if termo_busca.lower() in f['nome'].lower() or termo_limpo in cpf_limpo:
+                    funcionarios.append(f)
+            else:
+                # Busca apenas por Nome
+                if termo_busca.lower() in f['nome'].lower():
+                    funcionarios.append(f)
+        
+        # Ordena por nome
+        funcionarios.sort(key=lambda x: x['nome'])
+        
         if not funcionarios:
             flash(f"Nenhum colaborador encontrado para '{termo_busca}'.", "info")
-            
     else:
-        # Lista tudo se não houver busca
         funcionarios = db.execute(
-            "SELECT id,nome,cpf,cargo,data_admissao,status FROM funcionarios WHERE status='Ativo' ORDER BY nome"
+            "SELECT * FROM funcionarios WHERE status='Ativo' ORDER BY nome"
         ).fetchall()
         
     db.close()
     return render_template('lista_funcionarios.html',
                            funcionarios=funcionarios,
                            termo_busca=termo_busca)
- 
+
 @app.route('/funcionarios/desligados')
 @requer_perfil([1, 2])
 def listar_desligados():
@@ -618,27 +707,26 @@ def listar_desligados():
         return redirect(url_for('login'))
         
     termo_busca = request.args.get('busca', '').strip()
-    termo_limpo = re.sub(r'\D', '', termo_busca)
     
     db = get_db_connection()
     funcionarios = []
     
     if termo_busca:
-                
-        query = """SELECT id,nome,cpf,cargo,data_admissao,data_desligamento,tipo_desligamento,motivo_desligamento 
-                   FROM funcionarios 
-                   WHERE status='Desligado' AND (nome LIKE ? OR cpf LIKE ?) 
-                   ORDER BY data_desligamento DESC"""
-        params = (f"%{termo_busca}%", f"%{termo_busca}%") 
+        todos = db.execute("SELECT * FROM funcionarios WHERE status='Desligado'").fetchall()
         
-        funcionarios = db.execute(query, params).fetchall()
+        for f in todos:
+            cpf_limpo = re.sub(r'\D', '', str(f.get('cpf', '')))
+            if termo_busca.lower() in f['nome'].lower() or termo_busca in cpf_limpo:
+                funcionarios.append(f)
+        
+        # Ordena por data de desligamento (mais recente primeiro)
+        funcionarios.sort(key=lambda x: x.get('data_desligamento', ''), reverse=True)
         
         if not funcionarios:
             flash(f"Nenhum registro encontrado para '{termo_busca}'.", "warning")
-            
     else:
         funcionarios = db.execute(
-            "SELECT id,nome,cpf,cargo,data_admissao,data_desligamento,tipo_desligamento,motivo_desligamento FROM funcionarios WHERE status='Desligado' ORDER BY data_desligamento DESC"
+            "SELECT * FROM funcionarios WHERE status='Desligado' ORDER BY data_desligamento DESC"
         ).fetchall()
         
     db.close()
@@ -646,23 +734,26 @@ def listar_desligados():
                            funcionarios=funcionarios,
                            termo_busca=termo_busca,
                            nome=session.get('nome'))
- 
+
 @app.route('/funcionario/<int:id>')
 @requer_perfil([1, 2])
 def detalhes_funcionario(id):
     if 'user_id' not in session:
         return redirect(url_for('login'))
+    
     db = get_db_connection()
     func = db.execute('SELECT * FROM funcionarios WHERE id = ?', (id,)).fetchone()
     db.close()
+    
     if not func:
         return "Funcionário não encontrado", 404
+    
     return render_template('detalhes.html', f=func)
- 
+
 # =============================================================================
 # BUSCA E EDIÇÃO
 # =============================================================================
- 
+
 @app.route('/buscar_para_editar', methods=['POST'])
 @requer_perfil([1, 2])
 def buscar_para_editar():
@@ -671,21 +762,22 @@ def buscar_para_editar():
     
     termo = re.sub(r'\D', '', request.form.get('termo_busca', '').strip())
     
-    # 1. TRAVA DE SEGURANÇA: CPF tem 11 dígitos. 
-    # Se digitar menos que 3-4 dígitos, nem tente buscar, pois pode pegar IDs.
     if len(termo) < 3:
         flash("Digite mais dígitos para realizar a busca (evite conflito com IDs).", "warning")
         return redirect(url_for('dashboard'))
 
     db = get_db_connection()
-    db.row_factory = sqlite3.Row
     
-    # Esta query agora olha EXCLUSIVAMENTE para a coluna CPF.
-    query = """SELECT * FROM funcionarios 
-               WHERE REPLACE(REPLACE(cpf,'.',''),'-','') LIKE ?"""
+    # Busca todos os funcionários
+    todos = db.execute("SELECT * FROM funcionarios").fetchall()
     
-    # Buscamos apenas pelo que começa com os dígitos digitados
-    funcionarios = db.execute(query, (f"{termo}%",)).fetchall()
+    # Filtra por CPF em Python
+    funcionarios = []
+    for f in todos:
+        cpf_limpo = re.sub(r'\D', '', str(f.get('cpf', '')))
+        if cpf_limpo.startswith(termo):
+            funcionarios.append(f)
+    
     db.close()
     
     total = len(funcionarios)
@@ -702,16 +794,13 @@ def buscar_para_editar():
         return redirect(url_for('editar_funcionario', id=func['id']))
     
     else:
-        # Se encontrou vários, manda para a lista
         flash(f'{total} resultados encontrados. Refine o CPF.', 'info')
         return redirect(url_for('listar_funcionarios', busca=termo))
- 
+
 @app.route('/editar_funcionario/<int:id>', methods=['GET', 'POST'])
 @requer_perfil([1, 2])
 def editar_funcionario(id):
-    
     db = get_db_connection()
-    db.row_factory = sqlite3.Row
     funcionario = db.execute('SELECT * FROM funcionarios WHERE id = ?', (id,)).fetchone()
 
     if not funcionario:
@@ -725,25 +814,24 @@ def editar_funcionario(id):
         return redirect(url_for('listar_funcionarios'))
 
     if request.method == 'POST':
-        # 1. Campos Sensíveis: Ignoramos o formulário e mantemos os dados originais do banco
+        # Campos Sensíveis: Ignoramos o formulário e mantemos os dados originais do banco
         cpf_final = funcionario['cpf']
         nascimento_final = funcionario['data_nascimento']
         admissao_final = funcionario['data_admissao']
         login_extranet_final = funcionario['login_extranet']
 
-        # 2. Campos Editáveis: Coletamos do formulário
+        # Campos Editáveis: Coletamos do formulário
         status_novo = request.form.get('status')
         email_novo = request.form.get('email', '').strip()
 
-        # Validação básica de campos editáveis
         if email_novo and not validar_email(email_novo):
             flash('E-mail com formato inválido.', 'danger')
             return redirect(url_for('editar_funcionario', id=id))
 
         campos_formulario = {
-            'cpf': cpf_final, # Protegido
+            'cpf': cpf_final,
             'nome': request.form.get('nome', '').strip(),
-            'data_nascimento': nascimento_final, # Protegido
+            'data_nascimento': nascimento_final,
             'estado_civil': request.form.get('estado_civil'),
             'telefone': re.sub(r'\D', '', request.form.get('telefone', '')),
             'email': email_novo,
@@ -765,8 +853,8 @@ def editar_funcionario(id):
             'area': request.form.get('area'),
             'filial': request.form.get('filial'),
             'gestor': request.form.get('gestor'),
-            'login_extranet': login_extranet_final, # Protegido
-            'data_admissao': admissao_final, # Protegido
+            'login_extranet': login_extranet_final,
+            'data_admissao': admissao_final,
             'status': status_novo,
             'optou_convenio': request.form.get('optou_convenio'),
             'totalpass': request.form.get('totalpass'),
@@ -776,11 +864,9 @@ def editar_funcionario(id):
             'motivo_desligamento': request.form.get('motivo_desligamento') if status_novo == 'Desligado' else funcionario['motivo_desligamento']
         }
 
-        # Tratamento de salário
         salario_raw = request.form.get('salario')
         campos_formulario['salario'] = float(str(salario_raw).replace('.', '').replace(',', '.')) if salario_raw else funcionario['salario']
 
-        # Execução da atualização com auditoria
         try:
             with db:
                 db.execute('''UPDATE funcionarios SET
@@ -793,16 +879,17 @@ def editar_funcionario(id):
                 flash('Alterações salvas com sucesso!', 'success')
             return redirect(url_for('listar_funcionarios'))
         except Exception as e:
+            logger.error(f"Erro ao salvar: {e}")
             flash(f"Erro ao salvar: {e}", "danger")
         finally:
             db.close()
 
     return render_template('editar.html', funcionario=funcionario)
- 
+
 # =============================================================================
 # DESLIGAMENTO
 # =============================================================================
- 
+
 @app.route('/buscar_colaborador_desligar', methods=['POST'])
 @requer_perfil([1, 2])
 def buscar_colaborador_desligar():
@@ -811,9 +898,16 @@ def buscar_colaborador_desligar():
     
     cpf = re.sub(r'\D', '', request.form.get('cpf', '').strip())
     db = get_db_connection()
-    funcionario = db.execute(
-        "SELECT id, status FROM funcionarios WHERE REPLACE(REPLACE(cpf,'.',''),'-','') = ?",
-        (cpf,)).fetchone()
+    
+    todos = db.execute("SELECT * FROM funcionarios").fetchall()
+    
+    funcionario = None
+    for f in todos:
+        cpf_limpo = re.sub(r'\D', '', str(f.get('cpf', '')))
+        if cpf_limpo == cpf:
+            funcionario = f
+            break
+    
     db.close()
     
     if not funcionario:
@@ -825,16 +919,16 @@ def buscar_colaborador_desligar():
         return redirect(url_for('dashboard'))
     
     return redirect(url_for('detalhes_funcionario', id=funcionario['id']))
- 
+
 @app.route('/desligar_funcionario/<int:id>', methods=['POST'])
 @requer_perfil([1, 2])
 def desligar_funcionario(id):
-    
     db = get_db_connection()
     data_desligamento  = para_iso(request.form.get('data_desligamento', ''))
     tipo_desligamento  = request.form.get('type_desligamento')
     motivo_desligamento= request.form.get('motivo_desligamento', '')
     agora_br = get_horario_brasilia().strftime('%d/%m/%Y %H:%M:%S')
+    
     try:
         with db:
             db.execute("""UPDATE funcionarios SET status='Desligado',
@@ -847,23 +941,22 @@ def desligar_funcionario(id):
                  f"Desligado. Tipo: {tipo_desligamento}. Motivo: {motivo_desligamento}", agora_br))
         flash('Colaborador desligado com sucesso e registrado na auditoria!', 'success')
     except Exception as e:
+        logger.error(f'Erro ao processar desligamento: {e}')
         flash(f'Erro ao processar desligamento: {e}', 'error')
     finally:
         db.close()
+    
     return redirect(url_for('listar_funcionarios'))
- 
- 
+
 # =============================================================================
 # FÉRIAS
 # =============================================================================
- 
+
 @app.route('/lancar_ferias_busca', methods=['GET', 'POST'])
 @app.route('/lancar_ferias_busca/<int:id>', methods=['GET', 'POST'])
 @requer_perfil([1, 2])
 def lancar_ferias_busca(id=None):
- 
     db = get_db_connection()
-    db.row_factory = sqlite3.Row
     funcionario = None
     cpf_buscado = ""
     periodo_sugerido_inicio = ""
@@ -873,11 +966,9 @@ def lancar_ferias_busca(id=None):
     motivo_trava = ""
     ferias_existentes = None
     
-    # DETECÇÃO DE PERFIL: Verifica se o usuário logado é Administrador (ID 1)
     is_admin = (session.get('perfil') == 1)
  
     if id is not None:
-        # ALTERAÇÃO 1: Adicionado o campo 'filial' (Loja) no SELECT por ID
         funcionario = db.execute(
             'SELECT id, nome, cpf, data_admissao, filial FROM funcionarios WHERE id = ?', (id,)).fetchone()
         if funcionario:
@@ -885,10 +976,14 @@ def lancar_ferias_busca(id=None):
  
     if request.method == 'POST' and 'buscar_cpf' in request.form:
         cpf_buscado = re.sub(r'\D', '', request.form['cpf'].strip())
-        # ALTERAÇÃO 2: Adicionado o campo 'filial' (Loja) no SELECT por CPF
-        funcionario = db.execute(
-            "SELECT id, nome, cpf, data_admissao, status, filial FROM funcionarios WHERE REPLACE(REPLACE(cpf,'.',''),'-','')=? AND status='Ativo'", 
-            (cpf_buscado,)).fetchone()
+        
+        todos = db.execute("SELECT * FROM funcionarios WHERE status='Ativo'").fetchall()
+        for f in todos:
+            cpf_limpo = re.sub(r'\D', '', str(f.get('cpf', '')))
+            if cpf_limpo == cpf_buscado:
+                funcionario = f
+                break
+        
         if not funcionario:
             flash('Funcionário não encontrado!', 'danger')
  
@@ -910,10 +1005,12 @@ def lancar_ferias_busca(id=None):
         periodo_sugerido_inicio = inicio_ciclo.strftime('%Y-%m-%d')
         periodo_sugerido_fim    = fim_ciclo.strftime('%Y-%m-%d')
  
-        ferias_existentes = db.execute('''
-            SELECT * FROM ferias WHERE funcionario_id=? AND status_ferias='Agendada'
-            AND (strftime('%Y', data_inicio)=? OR data_inicio LIKE ?) LIMIT 1
-        ''', (funcionario['id'], str(ano_atual), f"%{ano_atual}%")).fetchone()
+        todas_ferias = db.execute("SELECT * FROM ferias WHERE funcionario_id = ?", (funcionario['id'],)).fetchall()
+        
+        for fe in todas_ferias:
+            if fe['status_ferias'] == 'Agendada' and fe['data_inicio'] and str(ano_atual) in fe['data_inicio']:
+                ferias_existentes = fe
+                break
  
         if ferias_existentes:
             pode_agendar = False
@@ -924,7 +1021,6 @@ def lancar_ferias_busca(id=None):
                 dt_inicio_ferias = data_atual
             dias_restantes = (dt_inicio_ferias - data_atual).days
             
-            # ALTERAÇÃO 3: Controle da trava dos 30 dias com Bypass de Administrador
             if dias_restantes >= 30:
                 pode_editar = True
             else:
@@ -938,17 +1034,15 @@ def lancar_ferias_busca(id=None):
  
     if request.method == 'POST' and 'salvar_ferias' in request.form:
         funcionario_id  = request.form['funcionario_id']
-        action_type     = request.form.get('action_type', 'NEW') # Captura se é NEW, UPDATE ou CANCEL
+        action_type     = request.form.get('action_type', 'NEW')
         agora_br        = get_horario_brasilia().strftime('%d/%m/%Y %H:%M:%S')
  
-        # BLINDAGEM DE BACK-END: Impede que operadores enviem requisições forçadas com prazo < 30 dias
         if action_type in ['UPDATE', 'CANCEL'] and not pode_editar and ferias_existentes:
             flash('Ação bloqueada! Prazo inferior a 30 dias exige perfil de Administrador.', 'danger')
             return redirect(url_for('lancar_ferias_busca', id=funcionario_id))
  
         try:
             with db:
-                # ALTERAÇÃO 4: Fluxo de Cancelamento de Férias (Muda status e audita)
                 if action_type == 'CANCEL':
                     db.execute("UPDATE ferias SET status_ferias='Cancelada' WHERE id=?", (ferias_existentes['id'],))
                     db.execute('''INSERT INTO historico_movimentacoes
@@ -960,7 +1054,6 @@ def lancar_ferias_busca(id=None):
                     flash('Agendamento de férias cancelado com sucesso!', 'success')
                     return redirect(url_for('dashboard'))
  
-                # Fluxo de processamento de datas comum a NEW e UPDATE
                 data_inicio_str = para_iso(request.form['data_inicio'])
                 data_fim_str    = para_iso(request.form['data_fim'])
                 periodo_inicio  = para_iso(request.form.get('periodo_aquisitivo_inicio', ''))
@@ -1019,10 +1112,7 @@ def lancar_ferias_busca(id=None):
                     flash('Férias agendadas com sucesso!', 'success')
             return redirect(url_for('dashboard'))
         except Exception as e:
-            import traceback
-            print("====== RASTRO DO ERRO REAL ======")
-            traceback.print_exc() # Isto vai forçar o erro a aparecer no terminal
-            print("=================================")
+            logger.error(f"Erro ao salvar férias: {e}")
             return f"Erro ao salvar: {e}"
         
     db.close()
@@ -1039,15 +1129,15 @@ def lancar_ferias_busca(id=None):
 # =============================================================================
 # EXPERIÊNCIA
 # =============================================================================
- 
+
 @app.route('/relatorio_experiencia')
 @requer_perfil([1, 2])
 def relatorio_experiencia():
     db = get_db_connection()
-    funcionarios = db.execute(
-        "SELECT nome, data_admissao, status FROM funcionarios WHERE status='Ativo'").fetchall()
+    funcionarios = db.execute("SELECT * FROM funcionarios WHERE status='Ativo'").fetchall()
     lista_exp = []
     hoje = get_horario_brasilia().date()
+    
     for f in funcionarios:
         try:
             adm  = datetime.strptime(para_iso(f['data_admissao']), '%Y-%m-%d').date()
@@ -1076,18 +1166,19 @@ def relatorio_experiencia():
                 'data_90':         d90.strftime('%d/%m/%Y'),
                 'dias_restantes':  dias_restantes,
                 'fase':            fase,
-                'alerta':          alerta,          # novo
-                'mensagem_status': mensagem_status, # novo
+                'alerta':          alerta,
+                'mensagem_status': mensagem_status,
             })
         except Exception as e:
-            print(f"Erro ao processar {f['nome']}: {e}")
+            logger.error(f"Erro ao processar {f['nome']}: {e}")
+    
     db.close()
     return render_template('experiencia.html', lista_exp=lista_exp)
- 
+
 # =============================================================================
 # OCORRÊNCIAS
 # =============================================================================
- 
+
 @app.route('/ocorrencias/nova', methods=['GET', 'POST'])
 @requer_perfil([1, 2])
 def nova_ocorrencia():
@@ -1127,8 +1218,8 @@ def nova_ocorrencia():
             with db:
                 db.execute("""INSERT INTO ocorrencias
                     (funcionario_id,tipo,data_inicio,data_fim,quantidade_dias,cid,observacao,data_registro)
-                    VALUES(?,?,?,?,?,?,?,datetime('now','localtime'))""",
-                    (funcionario_id, tipo, data_inicio_str, data_fim_str, quantidade_dias, cid, observacao_usuario))
+                    VALUES(?,?,?,?,?,?,?,?)""",
+                    (funcionario_id, tipo, data_inicio_str, data_fim_str, quantidade_dias, cid, observacao_usuario, agora_br))
  
                 tipo_fmt = tipo.replace('_', ' ').title()
                 detalhe  = f"Período: {data_inicio_str} até {data_fim_str} ({quantidade_dias} dias)."
@@ -1144,6 +1235,7 @@ def nova_ocorrencia():
             flash('Ocorrência registrada e auditada com sucesso!', 'success')
             return redirect(url_for('dashboard'))
         except Exception as e:
+            logger.error(f'Erro ao salvar ocorrência: {e}')
             flash(f'Erro ao salvar: {e}', 'error')
             return redirect(url_for('nova_ocorrencia'))
         finally:
@@ -1154,74 +1246,70 @@ def nova_ocorrencia():
             "SELECT id, nome FROM funcionarios WHERE status='Ativo' ORDER BY nome").fetchall()
     except Exception:
         funcionarios = []
+    
     db.close()
     return render_template('nova_ocorrencia.html', funcionarios=funcionarios, nome=session.get('nome'))
- 
+
 # =============================================================================
 # AUDITORIA
 # =============================================================================
- 
+
 @app.route('/auditoria')
 @requer_perfil([1, 3])
 def auditoria():
-
     POR_PAGINA = 30
     pagina_atual = request.args.get('pagina', 1, type=int)
     termo = request.args.get('busca', '').strip()
     
     db = get_db_connection()
     
-    # 1. Contagem total
-    query_count = "SELECT COUNT(*) FROM historico_movimentacoes h LEFT JOIN funcionarios f ON h.funcionario_id = f.id WHERE 1=1"
-    params = []
+    # Busca todos os logs de auditoria
+    todos_logs = db.execute("SELECT * FROM historico_movimentacoes ORDER BY id DESC").fetchall()
+    
+    # Busca funcionários e usuários para JOIN
+    funcionarios = {f['id']: f['nome'] for f in db.execute("SELECT id, nome FROM funcionarios").fetchall()}
+    usuarios = {u['id']: u['username'] for u in db.execute("SELECT id, username FROM usuarios").fetchall()}
+    
+    db.close()
+    
+    # Filtra por termo de busca
     if termo:
-        query_count += " AND (f.nome LIKE ? OR h.observacao LIKE ?)"
-        params.extend([f'%{termo}%', f'%{termo}%'])
-        
-    total = db.execute(query_count, params).fetchone()[0]
+        logs_filtrados = []
+        for log in todos_logs:
+            nome_func = funcionarios.get(log['funcionario_id'], '')
+            if termo.lower() in nome_func.lower() or termo.lower() in log.get('observacao', '').lower():
+                logs_filtrados.append(log)
+        todos_logs = logs_filtrados
+    
+    # Paginação
+    total = len(todos_logs)
     total_paginas = max(1, (total + POR_PAGINA - 1) // POR_PAGINA)
     offset = (pagina_atual - 1) * POR_PAGINA
-
-    # 2. Busca de dados
-    query_logs = '''
-        SELECT h.data_evento, u.username, f.nome as funcionario,
-               h.tipo_movimentacao, h.observacao, h.valor_antigo, h.valor_novo
-        FROM historico_movimentacoes h
-        JOIN usuarios u ON h.usuario_id = u.id
-        LEFT JOIN funcionarios f ON h.funcionario_id = f.id
-        WHERE 1=1
-    '''
+    logs_pagina = todos_logs[offset:offset + POR_PAGINA]
     
-    if termo:
-        query_logs += " AND (f.nome LIKE ? OR h.observacao LIKE ?)"
-    
-    query_logs += " ORDER BY h.id DESC LIMIT ? OFFSET ?"
-    
-    # Executa a query de busca
-    params.extend([POR_PAGINA, offset])
-    raw_logs = db.execute(query_logs, params).fetchall()
-    db.close() # FECHE APENAS UMA VEZ
-
-    # 3. Transformação dos dados com proteção contra erros
+    # Formata datas
     logs = []
-    for row in raw_logs:
-        log = dict(row)
-        data_str = log.get('data_evento')
+    for log in logs_pagina:
+        log_dict = dict(log)
+        data_str = log_dict.get('data_evento')
         
         if data_str:
             try:
-                dt_obj = datetime.strptime(data_str, '%Y-%m-%d %H:%M:%S')
-                log['data_evento'] = dt_obj.strftime('%d/%m/%Y %H:%M:%S')
+                dt_obj = datetime.strptime(data_str, '%d/%m/%Y %H:%M:%S')
+                log_dict['data_evento'] = dt_obj.strftime('%d/%m/%Y %H:%M:%S')
             except ValueError:
-                pass 
+                pass
         
-        logs.append(log)
+        log_dict['funcionario'] = funcionarios.get(log_dict['funcionario_id'], 'N/A')
+        log_dict['username'] = usuarios.get(log_dict['usuario_id'], 'N/A')
+        
+        logs.append(log_dict)
 
     return render_template('auditoria.html', 
                            logs=logs, 
                            pagina_atual=pagina_atual, 
                            total_paginas=total_paginas,
                            busca=termo)
- 
+
 if __name__ == '__main__':
     app.run(debug=True)
