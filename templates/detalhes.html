@@ -389,6 +389,7 @@
 <div class="modal fade" id="modalDesligamento" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content border-0 shadow" action="{{ url_for('desligar_funcionario', id=f.id) }}" method="POST">
+            {{ csrf_token() }}
             <div class="modal-header bg-danger text-white border-0">
                 <h5 class="modal-title fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i>Confirmar Rescisão</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -426,4 +427,3 @@
 <script src="/static/validacoes.js"></script>
 </body>
 </html>
- 
