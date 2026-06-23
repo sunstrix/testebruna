@@ -57,6 +57,8 @@
             {% endwith %}
  
             <form action="{{ url_for('login') }}" method="POST">
+                {{ csrf_token() }}
+                
                 <div class="mb-3">
                     <label class="form-label">Usuário</label>
                     <div class="input-group">
