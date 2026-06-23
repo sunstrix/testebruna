@@ -48,6 +48,23 @@
         .btn-boticario { background: var(--boticario-light); color: white; border: none; transition: all .25s ease; font-weight: 600; }
         .btn-boticario:hover { background: var(--boticario-dark); color: white; transform: translateY(-2px); }
         fieldset { border: none; padding: 0; margin: 0; }
+        
+        /* LOADING CEP */
+        .cep-loading {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+        }
+        .cep-loading.active {
+            display: block;
+        }
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+            border-width: 0.2em;
+        }
     </style>
 </head>
 <body>
@@ -135,6 +152,7 @@
                 <div class="card-body p-4">
  
                     <form action="{{ url_for('editar_funcionario', id=funcionario['id']) }}" method="POST" id="formEditar" class="needs-validation" novalidate>
+                        {{ csrf_token() }}
  
                         <input type="hidden" name="status"              value="{{ funcionario['status'] }}">
                         <input type="hidden" name="data_desligamento"   value="{{ funcionario['data_desligamento'] or '' }}">
@@ -271,11 +289,19 @@
  
                                 <div class="col-md-2">
                                     <label class="form-label">CEP</label>
-                                    <input type="text" class="form-control" name="endereco_cep" data-mask="cep" value="{{ funcionario['endereco_cep'] }}">
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control" name="endereco_cep" id="endereco_cep" data-mask="cep" value="{{ funcionario['endereco_cep'] }}">
+                                        <div class="cep-loading" id="cep-loading">
+                                            <div class="spinner-border spinner-border-sm text-success" role="status">
+                                                <span class="visually-hidden">Carregando...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-text text-muted">Digite o CEP para autocompletar.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Rua / Logradouro</label>
-                                    <input type="text" class="form-control" name="endereco_rua" value="{{ funcionario['endereco_rua'] }}">
+                                    <input type="text" class="form-control" name="endereco_rua" id="endereco_rua" value="{{ funcionario['endereco_rua'] }}">
                                 </div>
                                 <div class="col-md-1">
                                     <label class="form-label">Nº</label>
@@ -283,15 +309,15 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Bairro</label>
-                                    <input type="text" class="form-control" name="endereco_bairro" value="{{ funcionario['endereco_bairro'] }}">
+                                    <input type="text" class="form-control" name="endereco_bairro" id="endereco_bairro" value="{{ funcionario['endereco_bairro'] }}">
                                 </div>
                                 <div class="col-md-8">
                                     <label class="form-label">Cidade</label>
-                                    <input type="text" class="form-control" name="endereco_cidade" value="{{ funcionario['endereco_cidade'] }}">
+                                    <input type="text" class="form-control" name="endereco_cidade" id="endereco_cidade" value="{{ funcionario['endereco_cidade'] }}">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Estado</label>
-                                    <select class="form-select" name="endereco_estado">
+                                    <select class="form-select" name="endereco_estado" id="endereco_estado">
                                         <option value="" disabled>UF</option>
                                         {% for uf in ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MT','MS','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'] %}
                                         <option value="{{ uf }}" {% if funcionario['endereco_estado'] == uf %}selected{% endif %}>{{ uf }}</option>
@@ -491,5 +517,50 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/validacoes.js"></script>
+
+<script>
+    // INTEGRAÇÃO COM VIA CEP
+    const cepInput = document.getElementById('endereco_cep');
+    const cepLoading = document.getElementById('cep-loading');
+    
+    let cepTimeout;
+    
+    cepInput.addEventListener('input', function() {
+        clearTimeout(cepTimeout);
+        
+        const cepLimpo = this.value.replace(/\D/g, '');
+        
+        if (cepLimpo.length === 8) {
+            cepTimeout = setTimeout(() => {
+                buscarCEP(cepLimpo);
+            }, 500);
+        }
+    });
+    
+    function buscarCEP(cep) {
+        cepLoading.classList.add('active');
+        
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.erro) {
+                    alert('CEP não encontrado.');
+                    cepLoading.classList.remove('active');
+                    return;
+                }
+                
+                document.getElementById('endereco_rua').value = data.logradouro || '';
+                document.getElementById('endereco_bairro').value = data.bairro || '';
+                document.getElementById('endereco_cidade').value = data.localidade || '';
+                document.getElementById('endereco_estado').value = data.uf || '';
+                
+                cepLoading.classList.remove('active');
+            })
+            .catch(error => {
+                console.error('Erro ao buscar CEP:', error);
+                cepLoading.classList.remove('active');
+            });
+    }
+</script>
 </body>
 </html>
